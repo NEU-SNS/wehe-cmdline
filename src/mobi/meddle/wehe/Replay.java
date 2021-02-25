@@ -351,7 +351,7 @@ public class Replay {
           if (wsConn != null && wsConn.isOpen()) {
             wsConn.close();
           }
-          System.out.println(i + " " + Consts.MLAB_NUM_TRIES_TO_CONNECT);
+          Log.w("WebSocket", "Can't connect to WebSocket", e);
           if (i == Consts.MLAB_NUM_TRIES_TO_CONNECT - 1) {
             //if can't connect to mlab, try an amazon server using wehe2.meddle.mobi
             Log.i("GetReplayServerIP", "Can't get MLab server, trying Amazon");

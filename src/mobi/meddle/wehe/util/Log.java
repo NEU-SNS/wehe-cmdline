@@ -142,8 +142,8 @@ public class Log {
       randomID = new RandomString(10).nextString();
       historyCount = 0;
       File file = new File(Config.INFO_FILE);
-      if (!file.getParentFile().mkdirs()) {
-        System.out.println("\tUnable to make directories for " + Config.INFO_FILE);
+      if (file.getParentFile().mkdirs()) {
+        System.out.println("\tDirectory made: " + file.getParentFile().getName());
       }
     }
     return randomID + ";" + historyCount;
@@ -157,6 +157,7 @@ public class Log {
   public static void writeInfo() throws IOException {
     FileWriter writer = new FileWriter(Config.INFO_FILE);
     writer.write(randomID + "\n" + historyCount);
+    System.out.println("\tRandomID and History Count written to " + Config.INFO_FILE);
     writer.close();
   }
 
@@ -186,8 +187,9 @@ public class Log {
    */
   private static void renameLog(boolean isConsoleLog, String sucStr) {
     String dir = isConsoleLog ? Config.RESULTS_LOGS : Config.RESULTS_UI;
-    String oldLogName = dir + "logs_" + randomID + "_" + historyCount + ".txt";
-    String newLogName = dir + "logs_" + randomID + "_" + historyCount + "_" + sucStr + ".txt";
+    String type = isConsoleLog ? "logs_" : "ui_";
+    String oldLogName = dir + type + randomID + "_" + historyCount + ".txt";
+    String newLogName = dir + type + randomID + "_" + historyCount + "_" + sucStr + ".txt";
     File log = new File(oldLogName);
     File logNew = new File(newLogName);
     if (logNew.exists()) {
@@ -208,10 +210,11 @@ public class Log {
    */
   private static void appendLogFile(boolean isConsoleLog) {
     String dir = isConsoleLog ? Config.RESULTS_LOGS : Config.RESULTS_UI;
-    String filename = dir + "logs_" + randomID + "_" + historyCount + ".txt";
+    String type = isConsoleLog ? "logs_" : "ui_";
+    String filename = dir + type + randomID + "_" + historyCount + ".txt";
     File file = new File(filename);
     if (file.getParentFile().mkdirs()) {
-      System.out.println("\tUnable to make directories for " + filename);
+      System.out.println("\tDirectory made: " + file.getParentFile().getName());
     }
     try {
       FileWriter writer = new FileWriter(filename, isConsoleLog ? logAppend : uiAppend);

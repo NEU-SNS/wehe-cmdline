@@ -109,16 +109,17 @@ public class Main {
       switch (opt) {
         case "-n": //name of test
           boolean found = false;
+          String name = arg.toLowerCase().strip();
           for (String id : APP_IDS) { //make sure test name is valid
-            if (arg.toLowerCase().strip().equals(id)) {
+            if (name.equals(id)) {
               found = true;
               break;
             }
           }
           if (found) {
-            Config.appName = arg;
+            Config.appName = name;
           } else {
-            printError("\"" + arg + "\" is not a valid test name.");
+            printError("\"" + name + "\" is not a valid test name.");
           }
           break;
         case "-s": //name of server
