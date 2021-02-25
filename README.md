@@ -38,7 +38,7 @@ Example: `java -jar wehe-cmdline.jar -n applemusic -c -r results/ -l info`
 
 `-l LOG_LEVEL` - The level of logs and above that should be printed to console (all levels will be saved to logs on disk regardless of the level printed to console). Choose from `wtf`, `error`, `warn`, `info`, or `debug`. Default: none of these, only `UI` logs will be printed to the console.
 
-`-h` - Print this help message.
+`-h` - Print the help message.
 
 `-v` - Print the version number.
 
