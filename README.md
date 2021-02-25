@@ -40,7 +40,7 @@ Example: `java -jar wehe-cmdline.jar -n applemusic -c -r results/ -l info`
 
 `-h` - Print this help message.
 
-`-v` - Print the version.
+`-v` - Print the version number.
 
 **Tests**
 
