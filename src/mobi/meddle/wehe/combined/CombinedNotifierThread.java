@@ -33,7 +33,7 @@ public final class CombinedNotifierThread implements Runnable {
       try {
         dataInputStream = new DataInputStream(socket.getInputStream());
       } catch (IOException e) {
-        e.printStackTrace();
+        Log.e("Notifier", "Issue getting UDP InputStream", e);
       }
     } else {
       Log.i("Notifier", "socket not connected!");
@@ -57,11 +57,15 @@ public final class CombinedNotifierThread implements Runnable {
             inProcess -= 1;
             Log.i("Notifier", "received DONE!");
           } else {
-            Log.wtf("Notifier", "WTF???");
+            Log.wtf("Notifier", "WTF??? Unexpected message received: " + Notf[0]);
             break;
           }
         } else {
-          Thread.sleep(500);
+          try {
+            Thread.sleep(500);
+          } catch (InterruptedException e) {
+            Log.w("Notifier", "Sleep interrupted", e);
+          }
         }
 
         if (doneSending) {
@@ -108,7 +112,7 @@ public final class CombinedNotifierThread implements Runnable {
           throw new IOException("Data stream ended prematurely");
         }
       } catch (IOException e) {
-        e.printStackTrace();
+        Log.e("Notifier", "Error receiving bytes", e);
       }
       totalRead += bytesRead;
     }

@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Scanner;
 
+import mobi.meddle.wehe.constant.Consts;
+
 /**
  * Based off of the Log class in Android. Does all the logging to the console and UI, and saves the
  * logs on disk.
@@ -168,28 +170,33 @@ public class Log {
   /**
    * Call the functions to write the logs and UI text to disk.
    *
-   * @param success true if a result was reached (no diff, diff, or inconclusive); false if error
-   *                occured
+   * @param exitCode 0 if the test was successful, otherwise the error code as defined in Consts.java
+   * @return program exit code
    */
-  public static void writeLogs(boolean success) {
-    String sucStr = success ? "SUCCESS" : "FAILURE";
-    appendLogFile(true);
-    appendLogFile(false);
-    renameLog(true, sucStr);
-    renameLog(false, sucStr);
+  public static int writeLogs(int exitCode) {
+    boolean success = appendLogFile(true);
+    success = appendLogFile(false) && success;
+    if (!success && exitCode == 0) {
+      exitCode = Consts.ERR_WR_LOGS;
+    } else if (!success) {
+      exitCode = -exitCode;
+    }
+    renameLog(true, exitCode);
+    renameLog(false, exitCode);
+    return exitCode;
   }
 
   /**
    * Rename console or UI log to final name after test finish.
    *
    * @param isConsoleLog true if changing console log name; false if changing UI log name
-   * @param sucStr       either Success or Failure
+   * @param exitCode 0 if the test was successful, otherwise the error code as defined in Consts.java
    */
-  private static void renameLog(boolean isConsoleLog, String sucStr) {
+  private static void renameLog(boolean isConsoleLog, int exitCode) {
     String dir = isConsoleLog ? Config.RESULTS_LOGS : Config.RESULTS_UI;
     String type = isConsoleLog ? "logs_" : "ui_";
     String oldLogName = dir + type + randomID + "_" + historyCount + ".txt";
-    String newLogName = dir + type + randomID + "_" + historyCount + "_" + sucStr + ".txt";
+    String newLogName = dir + type + randomID + "_" + historyCount + "_" + exitCode + ".txt";
     File log = new File(oldLogName);
     File logNew = new File(newLogName);
     if (logNew.exists()) {
@@ -198,7 +205,7 @@ public class Log {
       if (log.renameTo(logNew)) {
         System.out.println("\tWritten to " + newLogName);
       } else {
-        System.out.println("\tFailed to change log name. Logs written to " + oldLogName);
+        System.out.println("\tFailed to change log name. Logs will remain written to " + oldLogName);
       }
     }
   }
@@ -207,8 +214,9 @@ public class Log {
    * Write or append to a log file.
    *
    * @param isConsoleLog true if write/append to console log; false if write/append to UI log
+   * @return true if log successfully appended; false otherwise
    */
-  private static void appendLogFile(boolean isConsoleLog) {
+  private static boolean appendLogFile(boolean isConsoleLog) {
     String dir = isConsoleLog ? Config.RESULTS_LOGS : Config.RESULTS_UI;
     String type = isConsoleLog ? "logs_" : "ui_";
     String filename = dir + type + randomID + "_" + historyCount + ".txt";
@@ -228,6 +236,8 @@ public class Log {
     } catch (IOException e) {
       System.out.println("\tUnable to write logs.");
       e.printStackTrace();
+      return false;
     }
+    return true;
   }
 }

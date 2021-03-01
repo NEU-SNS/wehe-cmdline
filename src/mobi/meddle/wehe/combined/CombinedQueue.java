@@ -208,7 +208,7 @@ public class CombinedQueue {
           try {
             Thread.sleep(waitTime);
           } catch (InterruptedException e) {
-            e.printStackTrace();
+            Log.w("nextTCP", "Sleep interrupted", e);
           }
         }
       }

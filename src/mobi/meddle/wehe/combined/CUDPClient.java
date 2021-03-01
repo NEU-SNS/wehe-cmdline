@@ -29,7 +29,7 @@ public class CUDPClient {
     try {
       this.selector = Selector.open();
     } catch (IOException e) {
-      e.printStackTrace();
+      Log.e("UDPClient", "Error creating UDP client", e);
     }
   }
 
@@ -50,8 +50,8 @@ public class CUDPClient {
 
       // register channel to selector
       channel.register(selector, SelectionKey.OP_WRITE);
-    } catch (Exception ex) {
-      ex.printStackTrace();
+    } catch (Exception e) {
+      Log.e("UDPClient", "Error creating UDP socket", e);
     }
   }
 
@@ -72,7 +72,7 @@ public class CUDPClient {
       this.channel.send(ByteBuffer.wrap(payload), new InetSocketAddress(
               instance.server, Integer.parseInt(instance.port)));
     } catch (IOException e) {
-      e.printStackTrace();
+      Log.e("UDPClient", "Error sending UDP packet", e);
     }
   }
 
@@ -83,7 +83,7 @@ public class CUDPClient {
     try {
       channel.close();
     } catch (IOException e) {
-      e.printStackTrace();
+      Log.w("UDPClient", "Issue closing UDP client", e);
     }
   }
 }

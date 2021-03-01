@@ -22,6 +22,8 @@ Example: `java -jar wehe-cmdline.jar -n applemusic -c -r results/ -l info`
 
 `-s SERV_NAME` - The hostname or IP of server to run the tests. Default: `wehe4.meddle.mobi`.
 
+`-m MLAB_API` - The URL of the API to retrieve access envelopes to run tests on M-Laba servers. Default: `https://locate.measurementlab.net/v2/nearest/wehe/replay`.
+
 `-c` - Turn off confirmation replays (if test is inconclusive, it will automatically rerun by default).
 
 `-a A_THRESH` - The area threshold percentage for determining differentiation. Default: `50`.
@@ -75,8 +77,40 @@ Output is contained in `RSLT_ROOT`:
 
 * `info.txt` - This file contains the user's random ID and the current history count.
 * `logs/` - This directory contains the logs that would be printed to the Android logs (think of Android's Log class).
- * Log files are the in the format `logs_[randomID]_[historyCount]_[SUCCESS | FAILURE].txt`
- * `SUCCESS` means a result was reached, and an error did not occur. `FAILURE` means something went wrong with that test.
+ * Log files are the in the format `logs_[randomID]_[historyCount]_[exitCode].txt`
 * `ui/` - This directory contains the text that a user running the Android client would see on his/her screen.
- * Log files are in the format `ui_[randomID]_[historyCount]_[SUCCESS | FAILURE].txt`
- * `SUCCESS` means a result was reached, and an error did not occur. `FAILURE` means something went wrong with that test.
+ * Log files are in the format `ui_[randomID]_[historyCount]_[exitCode].txt`
+
+**Exit Codes**
+
+| Exit Code | Exit Status         | Explanation                                                   |
+|-----------|---------------------|---------------------------------------------------------------|
+| 0         | `SUCCESS`           | No errors occurred during the test.                           |
+| 1         | `ERR_GENERAL`       | An error occurred that does not fit any below.                |
+| 2         | `ERR_CMDLINE`       | Invalid command line input.                                   |
+| 3         | `ERR_INFO_RD`       | Error reading from `info.txt`.                                |
+| 4         | `ERR_INFO_WR`       | Error writing to `info.txt`.                                  |
+| 5         | `ERR_WR_LOGS`       | Error writing to the logs.                                    |
+| 6         | `ERR_CONN_IP`       | Error connecting to server because IP not found.              |
+| 7         | `ERR_CONN_INST`     | Error getting instance of TCP or UDP socket to send data.     |
+| 8         | `ERR_CONN_IO_SERV`  | IO issue with the SideChannel.                                |
+| 9         | `ERR_CONN_WS`       | Error connecting to WebSocket.                                |
+| 10        | `ERR_UNK_HOST`      | Error connecting to the server.                               |
+| 11        | `ERR_UNK_META_HOST` | Error connecting to metadata server.                          |
+| 12        | `ERR_CERT`          | Error with the certificates.                                  |
+| 13        | `ERR_NO_ID`         | No random ID found.                                           |
+| 14        | `ERR_NO_TEST`       | Test not found on client.                                     |
+| 15        | `ERR_PERM_REPLAY`   | Test not found on server.                                     |
+| 16        | `ERR_PERM_IP`       | Another user with the same IP is running tests on the server. |
+| 17        | `ERR_PERM_RES`      | Server is low on resources.                                   |
+| 18        | `ERR_PERM_UNK`      | Unknown server error.                                         |
+| 19        | `ERR_ANA_NULL`      | No analysis status returned.                                  |
+| 20        | `ERR_ANA_NO_SUC`    | Analysis did not succeed.                                     |
+| 21        | `ERR_ANA_HIST_CT`   | Invalid analysis history count.                               |
+| 22        | `ERR_RSLT_NULL`     | No result status returned.                                    |
+| 23        | `ERR_RSLT_NO_RESP`  | Result succeed, but result was not sent.                      |
+| 24        | `ERR_RSLT_NO_SUC`   | Result not found.                                             |
+| 25        | `ERR_RSLT_ID_HC`    | Result returned wrong random ID or history count.             |
+| 26        | `ERR_BAD_JSON`      | JSON error.                                                   |
+
+**NOTE:** If the Exit Code is negative, then two errors occurred: the number in the Exit Code and `ERR_WR_LOGS`.

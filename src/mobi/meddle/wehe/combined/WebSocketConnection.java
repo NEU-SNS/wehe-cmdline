@@ -23,8 +23,9 @@ import mobi.meddle.wehe.util.Log;
  * WebSocket is opened at the beginning of the test and is maintained throughout the test, but
  * nothing is sent or received. The connection is closed when the test is over. MLab automatically
  * times out after 5 minutes, so a test must run within that period. A new connection is made for
- * each test. The Tyrus library is used for the WebSocket implementation for this client. TODO: get
- * better WebSocket library?
+ * each test. The Tyrus library is used for the WebSocket implementation for this client.
+ *
+ * TODO: get better WebSocket library? Does not work on Android < 8; works on > 8
  */
 @ClientEndpoint
 public class WebSocketConnection {
@@ -52,13 +53,13 @@ public class WebSocketConnection {
           container.connectToServer(WebSocketConnection.this, serverURI);
           success[0] = true;
         } catch (DeploymentException | IOException e) {
-          e.printStackTrace();
+          Log.e("WebSocket", "Failed connecting to WebSocket", e);
         }
       }
     });
     Thread.sleep(5000);
     if (!success[0]) {
-      throw new DeploymentException("Could connect to WebSocket");
+      throw new DeploymentException("Couldn't connect to WebSocket");
     }
     Log.i("WebSocket", "Connected to socket: " + serverURI.toString());
   }

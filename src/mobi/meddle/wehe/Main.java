@@ -1,7 +1,5 @@
 package mobi.meddle.wehe;
 
-import java.io.IOException;
-
 import mobi.meddle.wehe.constant.Consts;
 import mobi.meddle.wehe.constant.S;
 import mobi.meddle.wehe.util.Config;
@@ -28,21 +26,21 @@ public class Main {
    */
   public static void main(String[] args) {
     parseArgs(args);
-    Log.ui("Configs", "\n\tReplay name: " + Config.appName + "\n\tServer name: "
-            + Config.serverDisplay + "\n\tConfirmation replays: " + Config.confirmationReplays
-            + "\n\tArea threshold: " + Config.a_threshold + "\n\tKS2P-value threshold: "
-            + Config.ks2pvalue_threshold + "\n\tResources root: " + Config.RESOURCES_ROOT
-            + "\n\tResults root: " + Config.RESULTS_ROOT + "\n\tLogging level: " + logLevel);
+    Log.ui("Configs", "\n\tReplay name: " + Config.appName
+            + "\n\tServer name: " + Config.serverDisplay
+            + "\n\tM-Lab Server API: " + Config.mLabServers
+            + "\n\tConfirmation replays: " + Config.confirmationReplays
+            + "\n\tArea threshold: " + Config.a_threshold
+            + "\n\tKS2P-value threshold: " + Config.ks2pvalue_threshold
+            + "\n\tResources root: " + Config.RESOURCES_ROOT
+            + "\n\tResults root: " + Config.RESULTS_ROOT
+            + "\n\tLogging level: " + logLevel
+            + "\n\tVersion: " + Consts.VERSION_NAME);
 
     Replay replay = new Replay();
-    boolean success = false;
-    try {
-      success = replay.beginTest();
-      Log.writeLogs(success);
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-    System.exit(success ? 0 : -1);
+    int exitCode = replay.beginTest();
+    exitCode = Log.writeLogs(exitCode);
+    System.exit(exitCode);
   }
 
   /**
@@ -52,7 +50,7 @@ public class Main {
    */
   private static void printError(String error) {
     System.out.println(error + "\nUse the -h option for additional help.");
-    System.exit(1);
+    System.exit(Consts.ERR_CMDLINE);
   }
 
   /**
@@ -62,7 +60,7 @@ public class Main {
    * @return true if option is valid; false otherwise
    */
   private static boolean isValidArg(String arg) {
-    return arg.equals("-n") || arg.equals("-s") || arg.equals("-c") || arg.equals("-a")
+    return arg.equals("-n") || arg.equals("-s") || arg.equals("-m") || arg.equals("-c") || arg.equals("-a")
             || arg.equals("-k") || arg.equals("-t") || arg.equals("-r") || arg.equals("-l");
   }
 
@@ -76,11 +74,11 @@ public class Main {
     for (String arg : args) {
       if (arg.equals("-h")) {
         System.out.println(S.USAGE);
-        System.exit(0);
+        System.exit(Consts.SUCCESS);
       }
       if (arg.equals("-v")) {
         System.out.println("Wehe command line client\nVersion: " + Consts.VERSION_NAME);
-        System.exit(0);
+        System.exit(Consts.SUCCESS);
       }
       if (arg.equals("-n")) { //test name must be specified
         testSpecified = true;
@@ -122,8 +120,11 @@ public class Main {
             printError("\"" + name + "\" is not a valid test name.");
           }
           break;
-        case "-s": //name of server
+        case "-s": //url of server
           Config.serverDisplay = arg;
+          break;
+        case "-m": //url of mlab server api
+          Config.mLabServers = arg;
           break;
         case "-c": //turn off confirmation replay
           Config.confirmationReplays = false;

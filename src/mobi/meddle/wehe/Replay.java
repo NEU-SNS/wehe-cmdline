@@ -71,8 +71,7 @@ import mobi.meddle.wehe.util.Log;
 import mobi.meddle.wehe.util.UtilsManager;
 
 /**
- * Runs the replays. XML layout: activity_replay.xml adapter.ImageReplayRecyclerViewAdapter.java for
- * layout of each replay
+ * Runs the replays.
  */
 public class Replay {
   private final boolean runPortTests;
@@ -105,9 +104,7 @@ public class Replay {
   //for ports - 0 non-443 port, 1 is port 443
   private int testId;
   //---------------------------------------------------
-
   private String appName; //app/port to run
-  private boolean success = false;
   private final ArrayList<Timer> timers = new ArrayList<>();
 
   public Replay() {
@@ -123,12 +120,21 @@ public class Replay {
   /**
    * This method begins process to run tests. Step 1: Initialize several variables. Step 2: Run
    * tests. Step 3: Save results.
+   *
+   * @return exit status
    */
-  public boolean beginTest() throws IOException {
+  public int beginTest() {
     /*
      * Step 1: Initialize several variables.
      */
-    String[] info = Log.readInfo().split(";");
+    String[] info;
+    try {
+      info = Log.readInfo().split(";");
+    } catch (IOException e) {
+      Log.e("InfoFile", "Info file read error", e);
+      Log.ui("ERR_INFO_RD", S.ERROR_IO_INFO);
+      return Consts.ERR_INFO_RD;
+    }
     historyCount = Integer.parseInt(info[1]);
     // update historyCount
     historyCount++;
@@ -139,12 +145,18 @@ public class Replay {
     if (randomID == null) {
       Log.e("RecordReplay", "randomID does not exist!");
       Log.ui("ERR_NO_ID", S.ERROR_NO_USER_ID);
-      return success;
+      return Consts.ERR_NO_ID;
     }
 
     //write randomID and updated historyCount to the info file
     Log.incHistoryCount();
-    Log.writeInfo();
+    try {
+      Log.writeInfo();
+    } catch (IOException e) {
+      Log.e("InfoFile", "Info file write error", e);
+      Log.ui("ERR_INFO_WR", S.ERROR_IO_INFO);
+      return Consts.ERR_INFO_WR;
+    }
     Log.d("Replay", "historyCount: " + historyCount);
 
     app = parseAppJSON();
@@ -152,7 +164,8 @@ public class Replay {
       cleanUp();
       Log.wtf("noSuchApp", "Either there is no app named \"" + appName + "\", or a file"
               + " could not be found.");
-      return success;
+      Log.ui("ERR_NO_TEST", S.ERROR_UNKNOWN_TEST);
+      return Consts.ERR_NO_TEST;
     }
 
     //write current historyCount to applicationBean
@@ -160,9 +173,10 @@ public class Replay {
 
     // metadata here is user's network type device used geolocation if permitted etc
     metadataServer = Consts.METADATA_SERVER;
-    if (!setupServersAndCertificates(serverDisplay, metadataServer)) {
+    int suc = setupServersAndCertificates(serverDisplay, metadataServer);
+    if (suc != 0) {
       cleanUp();
-      return success;
+      return suc;
     }
 
     testId = -1;
@@ -181,18 +195,20 @@ public class Replay {
     if (publicIP.equals("-1")) {
       cleanUp();
       Log.ui("ERR_CONN_IP", S.ERROR_NO_CONNECTION);
-      return success;
+      return Consts.ERR_CONN_IP;
     }
 
     /*
      * Step 2: Run tests.
      */
-    runTest(); // Run the test on this.app
+    int exitCode = runTest(); // Run the test on this.app
     cleanUp();
 
     Log.ui("Finished", S.REPLAY_FINISHED_TITLE);
-    Log.i("Result Channel", "Exiting normally");
-    return success;
+    if (exitCode == 0) {
+      Log.i("Result Channel", "Exiting normally");
+    }
+    return exitCode;
   }
 
   /**
@@ -208,11 +224,12 @@ public class Replay {
   }
 
   /**
-   * This method parses apps_list.json file located in assets folder. This file has all the basic
+   * This method parses apps_list.json file located in res folder. This file has all the basic
    * details of apps for replay.
    */
   private ApplicationBean parseAppJSON() {
     try {
+      //get apps_list.json
       StringBuilder buf = new StringBuilder();
       File appInfo = new File(Config.APPS_FILENAME);
       Path tests_info_file = Paths.get(Config.APPS_FILENAME);
@@ -221,6 +238,7 @@ public class Replay {
         return null;
       }
 
+      //read the apps/ports in the file
       Scanner scanner = new Scanner(appInfo);
       while (scanner.hasNextLine()) {
         buf.append(scanner.nextLine());
@@ -241,6 +259,7 @@ public class Replay {
 
       JSONObject appObj;
       ApplicationBean bean;
+      //load each app/port into ApplicationBeans
       for (int i = 0; i < jArray.length(); i++) {
         appObj = jArray.getJSONObject(i);
 
@@ -284,14 +303,10 @@ public class Replay {
           return bean;
         }
       }
-    } catch (IOException ex) {
-      Log.d(Consts.LOG_APP_NAME,
-              "IOException while reading file " + Config.APPS_FILENAME);
-      ex.printStackTrace();
-    } catch (JSONException ex) {
-      Log.d(Consts.LOG_APP_NAME,
-              "JSONException while parsing JSON file " + Config.APPS_FILENAME);
-      ex.printStackTrace();
+    } catch (IOException e) {
+      Log.e(Consts.LOG_APP_NAME, "IOException while reading file " + Config.APPS_FILENAME, e);
+    } catch (JSONException e) {
+      Log.e(Consts.LOG_APP_NAME, "JSONException while parsing file " + Config.APPS_FILENAME, e);
     }
     return null;
   }
@@ -302,15 +317,15 @@ public class Replay {
    *
    * @param server         the hostname of the server to connect to
    * @param metadataServer the host name of the metadata server to connect to
-   * @return true if everything properly sets up; false otherwise
+   * @return 0 if everything properly sets up; error code otherwise
    */
-  private boolean setupServersAndCertificates(String server, String metadataServer) {
+  private int setupServersAndCertificates(String server, String metadataServer) {
     // We first resolve the IP of the server and then communicate with the server
     // Using IP only, because we have multiple server under same domain and we want
     // the client not to switch server during a test run
     //wehe4.meddle.mobi 90% returns 10.0.0.0 (use MLab), 10% legit IP (is Amazon)
 
-    //extreme hack to temporarily get around French DNS look up issue
+    //extreme hack to temporarily get around French DNS look up issue (currently 100% MLab)
     if (server.equals("wehe4.meddle.mobi")) {
       this.server = "10.0.0.0";
       Log.d("Serverhack", "hacking wehe4");
@@ -332,46 +347,49 @@ public class Replay {
     //request made. 4) Connect to SideChannel with MLab machine URL. 5) Authentication URL
     //has another 2 min timeout after connecting; every MLab test needs to do this process.
     if (this.server.equals("10.0.0.0") || serverIPisV6) {
-      JSONObject mLabResp = sendRequest(Consts.MLAB_SERVERS, "GET", false, null, null);
       boolean webSocketConnected = false;
-      int i = 0;
-      while (!webSocketConnected) { //try the 4 servers before going to wehe2
-        try {
-          JSONArray servers = (JSONArray) mLabResp.get("results"); //get MLab servers list
-          JSONObject serverObj = (JSONObject) servers.get(i); //get first MLab server
-          server = "wehe-" + serverObj.getString("machine"); //SideChannel URL
-          this.server = getServerIP(server);
-          String mLabURL = ((JSONObject) serverObj.get("urls"))
-                  .getString(Consts.MLAB_WEB_SOCKET_SERVER_KEY); //authentication URL
-          wsConn = new WebSocketConnection(new URI(mLabURL)); //connect to WebSocket
-          Log.d("WebSocket", "New WebSocket connectivity check: "
-                  + (wsConn.isOpen() ? "CONNECTED" : "CLOSED") + " TO " + server);
-          webSocketConnected = true;
-        } catch (URISyntaxException | JSONException | DeploymentException | NullPointerException | InterruptedException e) {
-          if (wsConn != null && wsConn.isOpen()) {
-            wsConn.close();
-          }
-          Log.w("WebSocket", "Can't connect to WebSocket", e);
-          if (i == Consts.MLAB_NUM_TRIES_TO_CONNECT - 1) {
-            //if can't connect to mlab, try an amazon server using wehe2.meddle.mobi
-            Log.i("GetReplayServerIP", "Can't get MLab server, trying Amazon");
-            this.server = getServerIP("wehe2.meddle.mobi");
+      try {
+        JSONObject mLabResp = sendRequest(Config.mLabServers, "GET", false, null, null);
+        JSONArray servers = (JSONArray) mLabResp.get("results"); //get MLab servers list
+        for (int i = 0; !webSocketConnected && i < servers.length(); i++) {
+          try {
+            JSONObject serverObj = (JSONObject) servers.get(i); //get MLab server
+            server = "wehe-" + serverObj.getString("machine"); //SideChannel URL
+            this.server = getServerIP(server);
+            String mLabURL = ((JSONObject) serverObj.get("urls"))
+                    .getString(Consts.MLAB_WEB_SOCKET_SERVER_KEY); //authentication URL
+            wsConn = new WebSocketConnection(new URI(mLabURL)); //connect to WebSocket
+            Log.d("WebSocket", "New WebSocket connectivity check: "
+                    + (wsConn.isOpen() ? "CONNECTED" : "CLOSED") + " TO " + server);
             webSocketConnected = true;
+          } catch (URISyntaxException | JSONException | DeploymentException | NullPointerException
+                  | InterruptedException e) {
+            if (wsConn != null && wsConn.isOpen()) {
+              wsConn.close();
+            }
+            Log.e("WebSocket", "Can't connect to WebSocket: " + server, e);
           }
-          i++;
         }
+      } catch (JSONException | NullPointerException e) {
+        Log.e("WebSocket", "Can't retrieve M-Lab servers", e);
+      }
+      if (!webSocketConnected) {
+        Log.ui("ERR_CONN_WS", S.ERROR_NO_WS);
+        return Consts.ERR_CONN_WS;
       }
     }
 
     if (this.server.equals("")) { //check to make sure IP was returned by getServerIP
-      Log.ui("ERR_UNK_HOST_NO_SERVER", S.ERROR_UNKNOWN_HOST);
+      Log.ui("ERR_UNK_HOST", S.ERROR_UNKNOWN_HOST);
       if (wsConn != null && wsConn.isOpen()) {
         wsConn.close();
       }
-      return false;
+      return Consts.ERR_UNK_HOST;
     }
     Log.d("GetReplayServerIP", "Server IP: " + this.server);
-    generateServerCertificate(true);
+    if (!generateServerCertificate(true)) {
+      return Consts.ERR_CERT;
+    }
 
     //get URL for analysis and results
     int port = Config.result_port; //get port to send tests through
@@ -381,12 +399,14 @@ public class Replay {
     if (metadataServer != null) {
       this.metadataServer = getServerIP(metadataServer);
       if (this.metadataServer.equals("")) { //get IP and certificates for metadata server
-        Log.ui("ERR_UNK_HOST_NO_META_SERVER", S.ERROR_UNKNOWN_META_HOST);
-        return false;
+        Log.ui("ERR_UNK_META_HOST", S.ERROR_UNKNOWN_META_HOST);
+        return Consts.ERR_UNK_META_HOST;
       }
-      generateServerCertificate(false);
+      if (!generateServerCertificate(false)) {
+        return Consts.ERR_CERT;
+      }
     }
-    return true;
+    return Consts.SUCCESS;
   }
 
   /**
@@ -417,7 +437,7 @@ public class Replay {
         try {
           Thread.sleep(1000);
         } catch (InterruptedException ex) {
-          ex.printStackTrace();
+          Log.w("getServerIP", "Sleep interrupted", ex);
         }
       }
     }
@@ -428,16 +448,16 @@ public class Replay {
    * Gets the certificates for the servers
    *
    * @param main true if main server; false if metadata server
+   * @return true if certificates successfully generated; false otherwise
    */
-  private void generateServerCertificate(boolean main) {
+  private boolean generateServerCertificate(boolean main) {
     try {
       String server = main ? "main" : "metadata";
       CertificateFactory cf = CertificateFactory.getInstance("X.509");
       Certificate ca;
-      try (InputStream caInput = new FileInputStream(main ? Config.MAIN_CERT : Config.META_CERT)) {
-        ca = cf.generateCertificate(caInput);
-        Log.d("Certificate", server + "=" + ((X509Certificate) ca).getIssuerDN());
-      }
+      InputStream caInput = new FileInputStream(main ? Config.MAIN_CERT : Config.META_CERT);
+      ca = cf.generateCertificate(caInput);
+      Log.d("Certificate", server + "=" + ((X509Certificate) ca).getIssuerDN());
 
       // Create a KeyStore containing our trusted CAs
       String keyStoreType = KeyStore.getDefaultType();
@@ -459,8 +479,11 @@ public class Replay {
       }
     } catch (CertificateException | NoSuchAlgorithmException | KeyStoreException
             | KeyManagementException | IOException e) {
-      e.printStackTrace();
+      Log.e("Certificates", "Error generating certificates", e);
+      Log.ui("ERR_CERT", S.ERROR_CERTS);
+      return false;
     }
+    return true;
   }
 
   /**
@@ -484,8 +507,7 @@ public class Replay {
           HttpURLConnection conn = (HttpURLConnection) u.openConnection();
           conn.setConnectTimeout(3000);
           conn.setReadTimeout(5000);
-          BufferedReader in = new BufferedReader(new InputStreamReader(
-                  conn.getInputStream()));
+          BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
           StringBuilder buffer = new StringBuilder();
           String input;
 
@@ -510,11 +532,11 @@ public class Replay {
           publicIP = "127.0.0.1";
           break;
         } catch (IOException e) {
-          Log.w("getPublicIP", "Can't connect to server");
+          Log.w("getPublicIP", "Can't connect to server", e);
           try {
             Thread.sleep(1000);
           } catch (InterruptedException e1) {
-            e1.printStackTrace();
+            Log.w("getPublicIP", "Slep interrupted", e1);
           }
           if (++numFails == 5) { //Cannot connect to server after 5 tries
             Log.w("getPublicIP", "Returning -1", e);
@@ -806,9 +828,8 @@ public class Replay {
       }
       appData.setTcpCSPs(csStrArray);
       appData.setReplayName(json.getString(3)); //name of replay
-
     } catch (JSONException | IOException e) {
-      e.printStackTrace();
+      Log.e("UnpickleJSON", "Error reading test files", e);
     }
     return appData;
   }
@@ -834,8 +855,10 @@ public class Replay {
    * notifier for UDP. Step 8: Start receiver to log throughputs on a given interval. Step 9: Send
    * packets to server. Step 10: Tell server that replay is finished. Step 11: Send throughputs and
    * slices to server. Step 12: Close side channel and TCP/UDP sockets.
+   *
+   * @return 0 if successful; error code otherwise
    */
-  private void runTest() {
+  private int runTest() {
     String[] types;
     /*
      * Step A: Flip a coin to decide which replay type to run first.
@@ -940,21 +963,26 @@ public class Replay {
 
         String permissionError = permission[1].trim();
         if (status.equals("0")) {
+          int errorCode;
           // These are the different errors that server can report
           switch (permissionError) {
             case "1": //server cannot identify replay
-              Log.ui("ERR_PERM_1", S.ERROR_UNKNOWN_REPLAY);
+              Log.ui("ERR_PERM_REPLAY", S.ERROR_UNKNOWN_REPLAY);
+              errorCode = Consts.ERR_PERM_REPLAY;
               break;
             case "2": //only one replay can run at a time per IP
-              Log.ui("ERR_PERM_2", S.ERROR_IP_CONNECTED);
+              Log.ui("ERR_PERM_IP", S.ERROR_IP_CONNECTED);
+              errorCode = Consts.ERR_PERM_IP;
               break;
             case "3": //server CPU > 95%, disk > 95%, or bandwidth > 2000 Mbps
-              Log.ui("ERR_PERM_3", S.ERROR_LOW_RESOURCES);
+              Log.ui("ERR_PERM_RES", S.ERROR_LOW_RESOURCES);
+              errorCode = Consts.ERR_PERM_RES;
               break;
             default:
-              Log.ui("ERR_PERM_4", S.ERROR_UNKNOWN);
+              Log.ui("ERR_PERM_UNK", S.ERROR_UNKNOWN);
+              errorCode = Consts.ERR_PERM_UNK;
           }
-          return;
+          return errorCode;
         }
 
         int numOfTimeSlices = Integer.parseInt(permission[2].trim(), 10);
@@ -1007,8 +1035,8 @@ public class Replay {
                     serverPortsMap.get("tcp")).get(destIP)).get(destPort);
           } catch (NullPointerException e) {
             Log.e("Replay", "Cannot get instance", e);
-            Log.ui("ERR_NO_CONN_INST", S.ERROR_NO_CONNECTION);
-            return;
+            Log.ui("ERR_CONN_INST", S.ERROR_NO_CONNECTION);
+            return Consts.ERR_CONN_INST;
           }
           assert instance != null;
           if (instance.server.trim().equals(""))
@@ -1139,15 +1167,15 @@ public class Replay {
         Log.w("Replay", "Replay interrupted!", e);
       } catch (IOException e) { //something wrong with receiveKbytes() or constructor in CombinedSideChannel
         Log.e("Replay", "Some IO issue with server", e);
-        Log.ui("ERR_CONN_IO_SERVER", S.ERROR_NO_CONNECTION);
-        return;
+        Log.ui("ERR_CONN_IO_SERV", S.ERROR_NO_CONNECTION);
+        return Consts.ERR_CONN_IO_SERV;
       }
     }
 
     /*
      * Step C: Determine if there is differentiation.
      */
-    getResults(portBlocked);
+    return getResults(portBlocked);
   }
 
   /**
@@ -1167,8 +1195,9 @@ public class Replay {
    * results to user. Rerun test if necessary.
    *
    * @param portBlocked true if a port in the port tests is blocked; false otherwise
+   * @return 0 if successful; otherwise error code
    */
-  private void getResults(boolean portBlocked) {
+  private int getResults(boolean portBlocked) {
     try {
       JSONObject result = null;
       if (!portBlocked) { //skip Step 1 and step 2 if port blocked
@@ -1185,15 +1214,15 @@ public class Replay {
         }
 
         if (result == null) {
-          Log.ui("ERR_NO_ANA1", S.ERROR_ANALYSIS_FAIL);
-          return;
+          Log.ui("ERR_ANA_NULL", S.ERROR_ANALYSIS_FAIL);
+          return Consts.ERR_ANA_NULL;
         }
 
         boolean success = result.getBoolean("success");
         if (!success) {
           Log.e("Result Channel", "ask4analysis failed!");
-          Log.ui("ERR_NO_ANA2", S.ERROR_ANALYSIS_FAIL);
-          return;
+          Log.ui("ERR_ANA_NO_SUC", S.ERROR_ANALYSIS_FAIL);
+          return Consts.ERR_ANA_NO_SUC;
         }
 
         Log.ui("updateStatus", S.WAITING);
@@ -1201,8 +1230,8 @@ public class Replay {
         // sanity check
         if (app.getHistoryCount() < 0) {
           Log.e("Result Channel", "historyCount value not correct!");
-          Log.ui("ERR_NO_ANA3", S.ERROR_ANALYSIS_FAIL);
-          return;
+          Log.ui("ERR_ANA_HIST_CT", S.ERROR_ANALYSIS_FAIL);
+          return Consts.ERR_ANA_HIST_CT;
         }
 
         Log.i("Result Channel", "ask4analysis succeeded!");
@@ -1210,10 +1239,14 @@ public class Replay {
         /*
          * Step 2: Get result of analysis from server.
          */
+        String resultStatus;
+        int exitStatus;
         for (int i = 0; ; i++) { //3 attempts to get analysis from sever
           result = getSingleResult(randomID, app.getHistoryCount()); //get result
 
           if (result == null) {
+            resultStatus = "ERR_RSLT_NULL";
+            exitStatus = Consts.ERR_RSLT_NULL;
             Log.e("Result Channel", "getSingleResult returned null!");
           } else {
             success = result.getBoolean("success");
@@ -1222,11 +1255,17 @@ public class Replay {
                 Log.i("Result Channel", "retrieve result succeeded");
                 break;
               } else { //success but response is missing
+                resultStatus = "ERR_RSLT_NO_RESP";
+                exitStatus = Consts.ERR_RSLT_NO_RESP;
                 Log.w("Result Channel", "Server result not ready");
               }
             } else if (result.has("error")) {
+              resultStatus = "ERR_RSLT_NO_SUC";
+              exitStatus = Consts.ERR_RSLT_NO_SUC;
               Log.e("Result Channel", "ERROR: " + result.getString("error"));
             } else {
+              resultStatus = "ERR_RSLT_NO_SUC";
+              exitStatus = Consts.ERR_RSLT_NO_SUC;
               Log.e("Result Channel", "Error: Some error getting results.");
             }
           }
@@ -1235,7 +1274,7 @@ public class Replay {
             try {
               Thread.sleep(2000);
             } catch (InterruptedException e) {
-              e.printStackTrace();
+              Log.w("Result Channel", "Sleep interrupted", e);
             }
           } else { //error after 3rd attempt
             if (runPortTests) { //"the port 80 issue"
@@ -1243,8 +1282,8 @@ public class Replay {
               Log.i("Result Channel", "Can't retrieve result, port blocked");
               break;
             } else {
-              Log.ui("ERR_TCP_SEND", S.NOT_ALL_TCP_SENT_TEXT);
-              return;
+              Log.ui(resultStatus, S.NOT_ALL_TCP_SENT_TEXT);
+              return exitStatus;
             }
           }
         }
@@ -1283,8 +1322,8 @@ public class Replay {
                 + "correct id: " + randomID
                 + " correct historyCount: " + app.getHistoryCount());
         Log.e("Result Channel", "Result content: " + response.toString());
-        Log.ui("ERR_RESULT1", S.ERROR_RESULT);
-        return;
+        Log.ui("ERR_RSLT_ID_HC", S.ERROR_RESULT);
+        return Consts.ERR_RSLT_ID_HC;
       }
 
       /*
@@ -1335,11 +1374,10 @@ public class Replay {
         try { //wait 2 seconds so user can read message before it disappears
           Thread.sleep(2000);
         } catch (InterruptedException e) {
-          e.printStackTrace();
+          Log.w("Result Channel", "Sleep interrupted", e);
         }
         rerun = true;
-        runTest();
-        return; //return so that first result isn't saved
+        return runTest(); //return so that first result isn't saved
       }
 
       String saveStatus; //save to disk, so it can appear in the correct language in prev results
@@ -1383,10 +1421,12 @@ public class Replay {
       response.put("carrier", "myCarrier");
       Log.d("response", response.toString());
 
-      success = true;
       Log.ui("FinalResults", response.toString()); //save user results to UI log file
     } catch (JSONException e) {
       Log.e("Result Channel", "parsing json error", e);
+      Log.ui("ERR_BAD_JSON", S.ERROR_JSON);
+      return Consts.ERR_BAD_JSON;
     }
+    return Consts.SUCCESS;
   }
 }

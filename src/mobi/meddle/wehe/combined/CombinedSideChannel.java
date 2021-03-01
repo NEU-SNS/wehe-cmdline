@@ -166,7 +166,7 @@ public class CombinedSideChannel {
         ports.put(key, tempHolder);
       }
     } catch (JSONException e) {
-      e.printStackTrace();
+      Log.e("receivePortMapping", "Error reading JSON", e);
     }
     return ports;
   }
@@ -256,7 +256,7 @@ public class CombinedSideChannel {
     try {
       socket.close();
     } catch (IOException e) {
-      e.printStackTrace();
+      Log.w("sideChannelLog", "Issue closing side channel", e);
     }
   }
 
@@ -272,7 +272,7 @@ public class CombinedSideChannel {
               "%010d", buf.length) + "  " + new String(buf));
       dataOutputStream.write(buf);
     } catch (IOException e) {
-      e.printStackTrace();
+      Log.e("SideChannelLog", "Error sending object", e);
     }
   }
 
@@ -316,7 +316,7 @@ public class CombinedSideChannel {
           throw new IOException("Data stream ended prematurely");
         }
       } catch (IOException e) {
-        e.printStackTrace();
+        Log.e("ReceiveBytes", "Error receiving data", e);
         throw new IOException("Something went wrong receiving bytes");
       }
       totalRead += bytesRead;

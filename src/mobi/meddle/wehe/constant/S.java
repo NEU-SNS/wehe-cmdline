@@ -3,10 +3,15 @@ package mobi.meddle.wehe.constant;
 public final class S {
   public static final String PORT_NAME = "Port %s";
 
+  public static final String ERROR_IO_INFO = "IO error related to info file.";
+  public static final String ERROR_JSON = "JSON error.";
   public static final String ERROR_NO_CONNECTION = "Cannot connect to server, try again later.";
+  public static final String ERROR_NO_WS = "Cannot connect to WebSocket.";
   public static final String ERROR_UNKNOWN_HOST = "Cannot find server. Try again later or try another server.";
   public static final String ERROR_UNKNOWN_META_HOST = "Cannot find metadata server. Try again later.";
+  public static final String ERROR_CERTS = "Error with certificates.";
   public static final String ERROR_NO_USER_ID = "Cannot find the user ID.";
+  public static final String ERROR_UNKNOWN_TEST = "No such test exists.";
   public static final String ERROR_UNKNOWN_REPLAY = "Replay does not match the replay on the server.";
   public static final String ERROR_IP_CONNECTED = "A client with this IP is already connected.";
   public static final String ERROR_LOW_RESOURCES = "Server is low on resources, try again later.";
@@ -61,17 +66,19 @@ public final class S {
           + "Options:\n"
           + "  -n TEST_NAME name of the test to run (required argument; see below for list of tests)\n"
           + "  -s SERV_NAME hostname or IP of server to run the tests (Default: wehe4.meddle.mobi)\n"
+          + "  -m MLAB_API  URL of the API to retrieve access envelopes to run tests on M-Lab servers\n"
+          + "                 (Default: https://locate.measurementlab.net/v2/nearest/wehe/replay)\n"
           + "  -c           turn off confirmation replays (if test is inconclusive, it will automatically\n"
           + "                 rerun by default)\n"
           + "  -a A_THRESH  area threshold percentage for determining differentiation (Default: 50)\n"
           + "  -k KS2P_VAL  KS2P-value threshold percentage for determining differentiation (Default: 1)\n"
           + "  -t RESR_ROOT resources root containing apps_list.json and the tests (Default: res/)\n"
           + "  -r RSLT_ROOT results root containing the result logs and info (Default: test_results/)\n"
-          + "  -l LOG_LEVEL level of logs and above that should be printed to console (all levels\n"
-          + "                 will be saved to logs on disk regardless of level printed to console);\n"
+          + "  -l LOG_LEVEL level of logs and above that should be printed to console (all levels will\n"
+          + "                 be saved to the logs on disk regardless of the level printed to console);\n"
           + "                 either wtf, error, warn, info, or debug (Default: none of these, only UI logs)\n"
           + "  -h           print this help message\n"
-          + "  -v           print the version\n\n"
+          + "  -v           print the version number\n\n"
           + "App Name          Test Name (-n arg) || Port Name               Test Name (-n arg)\n"
           + "-------------------------------------||-------------------------------------------\n"
           + "Apple Music       applemusic         || 80 HTTP small           port80s\n"
