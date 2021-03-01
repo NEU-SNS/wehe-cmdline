@@ -81,9 +81,9 @@ Output is contained in `RSLT_ROOT`:
 
 * `info.txt` - This file contains the user's random ID and the current history count.
 * `logs/` - This directory contains the logs that would be printed to the Android logs (think of Android's Log class).
- * Log files are the in the format `logs_[randomID]_[historyCount]_[exitCode].txt`
+  * Log files are the in the format `logs_[randomID]_[historyCount]_[exitCode].txt`
 * `ui/` - This directory contains the text that a user running the Android client would see on his/her screen.
- * Log files are in the format `ui_[randomID]_[historyCount]_[exitCode].txt`
+  * Log files are in the format `ui_[randomID]_[historyCount]_[exitCode].txt`
 
 **Exit Codes**
 
