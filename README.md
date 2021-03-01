@@ -8,7 +8,7 @@ This is the Wehe command line client. This app runs tests to help users determin
 * Building the source code requires two additional libraries: [Tyrus Standalone Client v1.9](https://mvnrepository.com/artifact/org.glassfish.tyrus.bundles/tyrus-standalone-client/1.9) for WebSocket support and [JSON](https://github.com/stleary/JSON-java) ([Maven repo](https://mvnrepository.com/artifact/org.json/json/20201115)).
 * The `src/` directory contains the source files.
 * The `res/` directory contains the app and port tests.
-* The code runs one test at a time.
+* The code runs one test for each shell command.
 
 ## Run the jar
 
@@ -26,7 +26,7 @@ Example: `java -jar wehe-cmdline.jar -n applemusic -c -r results/ -l info`
 
 `-s SERV_NAME` - The hostname or IP of server to run the tests. Default: `wehe4.meddle.mobi`.
 
-`-m MLAB_API` - The URL of the API to retrieve access envelopes to run tests on M-Laba servers. Default: `https://locate.measurementlab.net/v2/nearest/wehe/replay`.
+`-m MLAB_API` - The URL of the API to retrieve access envelopes to run tests on M-Lab servers. Default: `https://locate.measurementlab.net/v2/nearest/wehe/replay`.
 
 `-c` - Turn off confirmation replays (if test is inconclusive, it will automatically rerun by default).
 
@@ -117,4 +117,4 @@ Output is contained in `RSLT_ROOT`:
 | 25        | `ERR_RSLT_ID_HC`    | Result returned wrong random ID or history count.             |
 | 26        | `ERR_BAD_JSON`      | JSON error.                                                   |
 
-**NOTE:** If the Exit Code is negative, then two errors occurred: the number in the Exit Code and `ERR_WR_LOGS`.
+**NOTE:** If the Exit Code is negative, then two errors occurred: the number in the Exit Code and `ERR_WR_LOGS`. For example, `-24` means no result was found and the logs could not be written to disk.
