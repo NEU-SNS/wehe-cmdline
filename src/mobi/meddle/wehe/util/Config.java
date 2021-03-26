@@ -9,6 +9,7 @@ public class Config {
   public static String appName;
   public static String serverDisplay = "wehe4.meddle.mobi";
   public static String mLabServers = "https://locate.measurementlab.net/v2/nearest/wehe/replay";
+  public static int numServers = 1;
   public static boolean confirmationReplays = true;
   public static boolean useDefaultThresholds = true;
   public static int a_threshold = Consts.A_THRESHOLD;
@@ -16,7 +17,6 @@ public class Config {
   public static int logLev = 0;
 
   public static boolean timing;
-  public static String server;
   public static String publicIP;
   public static int result_port = 56566;
   public static int combined_sidechannel_port = 55556;

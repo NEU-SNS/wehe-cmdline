@@ -80,11 +80,11 @@ public class Replay {
   //---------------------------------------------------
   private CombinedAppJSONInfoBean appData;
   private ApplicationBean app;
-  private String server; //server to run the replays to
+  private ArrayList<String> servers = new ArrayList<>(); //server to run the replays to
   private String metadataServer;
-  private WebSocketConnection wsConn = null;
+  private ArrayList<WebSocketConnection> wsConns = new ArrayList<>();
   private boolean doTest; //add a tail for testing data if true
-  private String analyzerServerUrl;
+  private ArrayList<String> analyzerServerUrls = new ArrayList<>();
   //true if confirmation replay should run if the first replay has differentiation
   private final boolean confirmationReplays;
   private final boolean useDefaultThresholds;
@@ -187,7 +187,6 @@ public class Replay {
     //replay will also pause for 2 seconds at that point in the replay
     //port tests try to run as fast as possible, so there is no timing for them
     Config.timing = !runPortTests;
-    Config.server = server;
     String publicIP = getPublicIP("80"); //get user's IP address
     Config.publicIP = publicIP;
     Log.d("Replay", "public IP: " + publicIP);
@@ -215,8 +214,10 @@ public class Replay {
    * Close connections and cancel timers before exiting.
    */
   private void cleanUp() {
-    if (wsConn != null && wsConn.isOpen()) {
-      wsConn.close();
+    for (WebSocketConnection wsConn : wsConns) {
+      if (wsConn != null && wsConn.isOpen()) {
+        wsConn.close();
+      }
     }
     for (Timer t : timers) {
       t.cancel();
@@ -327,17 +328,17 @@ public class Replay {
 
     //extreme hack to temporarily get around French DNS look up issue (currently 100% MLab)
     if (server.equals("wehe4.meddle.mobi")) {
-      this.server = "10.0.0.0";
+      servers.add("10.0.0.0");
       Log.d("Serverhack", "hacking wehe4");
     } else {
-      this.server = getServerIP(server);
+      servers.add(getServerIP(server));
     }
     // A hacky way to check server IP version
     boolean serverIPisV6 = false;
-    if (this.server.contains(":")) {
+    if (servers.get(0).contains(":")) {
       serverIPisV6 = true;
     }
-    Log.d("ServerIPVersion", this.server + (serverIPisV6 ? "IPV6" : "IPV4"));
+    Log.d("ServerIPVersion", servers.get(0) + (serverIPisV6 ? "IPV6" : "IPV4"));
     //Connect to an MLab server if wehe4.meddle.mobi IP is 10.0.0.0 or if the client is using ipv6.
     // Steps to connect: 1) GET
     //request to MLab site to get MLab servers that can be connected to; 2) Parse first
@@ -346,22 +347,24 @@ public class Replay {
     //server doesn't disconnect (for security). URL valid for connection for 2 min after GET
     //request made. 4) Connect to SideChannel with MLab machine URL. 5) Authentication URL
     //has another 2 min timeout after connecting; every MLab test needs to do this process.
-    if (this.server.equals("10.0.0.0") || serverIPisV6) {
-      boolean webSocketConnected = false;
+    if (servers.get(0).equals("10.0.0.0") || serverIPisV6) {
+      servers.clear();
+      wsConns.clear();
       try {
         JSONObject mLabResp = sendRequest(Config.mLabServers, "GET", false, null, null);
-        JSONArray servers = (JSONArray) mLabResp.get("results"); //get MLab servers list
-        for (int i = 0; !webSocketConnected && i < servers.length(); i++) {
+        JSONArray mLabServers = (JSONArray) mLabResp.get("results"); //get MLab servers list
+        WebSocketConnection wsConn = null;
+        for (int i = 0; wsConns.size() < Config.numServers && i < mLabServers.length(); i++) {
           try {
-            JSONObject serverObj = (JSONObject) servers.get(i); //get MLab server
+            JSONObject serverObj = (JSONObject) mLabServers.get(i); //get MLab server
             server = "wehe-" + serverObj.getString("machine"); //SideChannel URL
-            this.server = getServerIP(server);
             String mLabURL = ((JSONObject) serverObj.get("urls"))
                     .getString(Consts.MLAB_WEB_SOCKET_SERVER_KEY); //authentication URL
-            wsConn = new WebSocketConnection(new URI(mLabURL)); //connect to WebSocket
+            wsConn = new WebSocketConnection(i, new URI(mLabURL)); //connect to WebSocket
+            wsConns.add(wsConn);
+            servers.add(getServerIP(server));
             Log.d("WebSocket", "New WebSocket connectivity check: "
                     + (wsConn.isOpen() ? "CONNECTED" : "CLOSED") + " TO " + server);
-            webSocketConnected = true;
           } catch (URISyntaxException | JSONException | DeploymentException | NullPointerException
                   | InterruptedException e) {
             if (wsConn != null && wsConn.isOpen()) {
@@ -373,28 +376,29 @@ public class Replay {
       } catch (JSONException | NullPointerException e) {
         Log.e("WebSocket", "Can't retrieve M-Lab servers", e);
       }
-      if (!webSocketConnected) {
+      if (wsConns.size() < Config.numServers) {
         Log.ui("ERR_CONN_WS", S.ERROR_NO_WS);
         return Consts.ERR_CONN_WS;
       }
     }
 
-    if (this.server.equals("")) { //check to make sure IP was returned by getServerIP
-      Log.ui("ERR_UNK_HOST", S.ERROR_UNKNOWN_HOST);
-      if (wsConn != null && wsConn.isOpen()) {
-        wsConn.close();
+    for (String srvr : servers) {
+      if (srvr.equals("")) { //check to make sure IP was returned by getServerIP
+        Log.ui("ERR_UNK_HOST", S.ERROR_UNKNOWN_HOST);
+        return Consts.ERR_UNK_HOST;
       }
-      return Consts.ERR_UNK_HOST;
     }
-    Log.d("GetReplayServerIP", "Server IP: " + this.server);
+    Log.d("GetReplayServerIP", "Server IPs: " + servers);
     if (!generateServerCertificate(true)) {
       return Consts.ERR_CERT;
     }
 
     //get URL for analysis and results
     int port = Config.result_port; //get port to send tests through
-    analyzerServerUrl = ("https://" + this.server + ":" + port + "/Results");
-    Log.d("Result Channel", "path: " + this.server + " port: " + port);
+    for (String srvr : servers) {
+      analyzerServerUrls.add("https://" + srvr + ":" + port + "/Results");
+      Log.d("Result Channel", "path: " + srvr + " port: " + port);
+    }
 
     if (metadataServer != null) {
       this.metadataServer = getServerIP(metadataServer);
@@ -495,8 +499,8 @@ public class Replay {
   private String getPublicIP(String port) {
     String publicIP = "127.0.0.1";
 
-    if (server != null && !server.equals("127.0.0.1")) {
-      String url = "http://" + server + ":" + port + "/WHATSMYIPMAN";
+    if (servers.size() != 0 && !servers.get(0).equals("127.0.0.1")) {
+      String url = "http://" + servers.get(0) + ":" + port + "/WHATSMYIPMAN";
       Log.d("getPublicIP", "url: " + url);
 
       int numFails = 0;
@@ -546,7 +550,7 @@ public class Replay {
         }
       }
     } else {
-      Log.w("getPublicIP", "server ip is not available: " + server);
+      Log.w("getPublicIP", "Client IP is not available");
     }
     return publicIP;
   }
@@ -558,11 +562,12 @@ public class Replay {
    * throughputs of testId 1 to testId 0 of the same history count. The server then determines if
    * there is differentiation and stores the result on the server.
    *
+   * @param url          the url to the server where analysis will take place
    * @param id           the random ID assigned to specific user's device
    * @param historyCount the test to analyze
    * @return a JSONObject: { "success" : true | false }; true if server analyzes successfully
    */
-  private JSONObject ask4analysis(String id, int historyCount) {
+  private JSONObject ask4analysis(String url, String id, int historyCount) {
     HashMap<String, String> pairs = new HashMap<>();
 
     pairs.put("command", "analyze");
@@ -570,12 +575,13 @@ public class Replay {
     pairs.put("historyCount", String.valueOf(historyCount));
     pairs.put("testID", "1");
 
-    return sendRequest(analyzerServerUrl, "POST", true, null, pairs);
+    return sendRequest(url, "POST", true, null, pairs);
   }
 
   /**
    * Retrieves a replay result from the server that it previously was requested to analyze.
    *
+   * @param url          the url of the server to get the result
    * @param id           the random ID assigned to a specific user's device
    * @param historyCount the test containing the replay to retrieve
    * @return a JSONObject with a key named "success". If value of "success" is false, a key named
@@ -584,7 +590,7 @@ public class Replay {
    * "userID", "extraString", "historyCount", "testID", "area_test", "ks2_ratio_test",
    * "xput_avg_original", "xput_avg_test", "ks2dVal", "ks2pVal"
    */
-  private JSONObject getSingleResult(String id, int historyCount) {
+  private JSONObject getSingleResult(String url, String id, int historyCount) {
     ArrayList<String> data = new ArrayList<>();
 
     data.add("userID=" + id);
@@ -592,7 +598,7 @@ public class Replay {
     data.add("historyCount=" + historyCount);
     data.add("testID=1");
 
-    return sendRequest(analyzerServerUrl, "GET", true, data, null);
+    return sendRequest(url, "GET", true, data, null);
   }
 
   /**
@@ -876,9 +882,9 @@ public class Replay {
     int iteration = 1;
     boolean portBlocked = false;
     for (String channel : types) {
-      if (wsConn != null) { //if using MLab, check that still connected
-        Log.d("WebSocket", "Before running test WebSocket connectivity check: "
-                + (wsConn.isOpen() ? "CONNECTED" : "CLOSED"));
+      for (WebSocketConnection w : wsConns) { //if using MLab, check that still connected
+        Log.d("WebSocket", "Before running test WebSocket (id: " + w.getId() + ") connectivity check: "
+                + (w.isOpen() ? "CONNECTED" : "CLOSED"));
       }
 
       /*
@@ -897,15 +903,25 @@ public class Replay {
         Log.ui("updateStatus", iteration + "/" + types.length + " " + S.CREATE_SIDE_CHANNEL);
         int sideChannelPort = Config.combined_sidechannel_port;
 
-        Log.d("Server", server + " metadata " + metadataServer);
+        Log.d("Servers", servers + " metadata " + metadataServer);
         // This side channel is used to communicate with the server in bytes mode and to
         // run traces, it send tcp and udp packets and receives the same from the server
         //Server handles communication in handle() function in server_replay.py in server
         //code
-        CombinedSideChannel sideChannel = new CombinedSideChannel(sslSocketFactory,
-                server, sideChannelPort, appData.isTCP());
+        ArrayList<CombinedSideChannel> sideChannels = new ArrayList<>();
+        int id = 0;
+        //each concurrent test gets its own sidechannel because each concurrent test is run on
+        //a different server
+        for (String server : servers) {
+          sideChannels.add(new CombinedSideChannel(id, sslSocketFactory,
+                  server, sideChannelPort, appData.isTCP()));
+          id++;
+        }
 
-        JitterBean jitterBean = new JitterBean();
+        ArrayList<JitterBean> jitterBeans = new ArrayList<>();
+        for (CombinedSideChannel ignored : sideChannels) {
+          jitterBeans.add(new JitterBean());
+        }
 
         // initialize endOfTest value
         boolean endOfTest = false; //true if last replay in this test is running
@@ -941,61 +957,70 @@ public class Replay {
          */
         // This is group of values that is used to track traces on server
         // Youtube;False;0;DiffDetector;0;129.10.9.93;1.0
-        sideChannel.declareID(appData.getReplayName(), endOfTest ? "True" : "False",
-                randomID, String.valueOf(historyCount), String.valueOf(testId),
-                doTest ? Config.extraString + "-Test" : Config.extraString,
-                ipThroughProxy, Consts.VERSION_NAME);
+        for (CombinedSideChannel sc : sideChannels) {
+          sc.declareID(appData.getReplayName(), endOfTest ? "True" : "False",
+                  randomID, String.valueOf(historyCount), String.valueOf(testId),
+                  doTest ? Config.extraString + "-Test" : Config.extraString,
+                  ipThroughProxy, Consts.VERSION_NAME);
 
-        // This tuple tells the server if the server should operate on packets of traces
-        // and if so which packets to process
-        sideChannel.sendChangeSpec(-1, "null", "null");
+          // This tuple tells the server if the server should operate on packets of traces
+          // and if so which packets to process
+          sc.sendChangeSpec(-1, "null", "null");
+        }
 
         /*
          * Step 2: Ask server for permission to run replay.
          */
         Log.ui("updateStatus", iteration + "/" + types.length + " " + S.ASK4PERMISSION);
         // Now to move forward we ask for server permission
-        String[] permission = sideChannel.ask4Permission();
-        String status = permission[0].trim();
+        ArrayList<Integer> numOfTimeSlices = new ArrayList<>();
+        for (CombinedSideChannel sc : sideChannels) {
+          String[] permission = sc.ask4Permission();
+          String status = permission[0].trim();
 
-        Log.d("Replay", "permission[0]: " + status
-                + " permission[1]: " + permission[1]);
+          Log.d("Replay", "Channel " + sc.getId() + ": permission[0]: " + status
+                  + " permission[1]: " + permission[1]);
 
-        String permissionError = permission[1].trim();
-        if (status.equals("0")) {
-          int errorCode;
-          // These are the different errors that server can report
-          switch (permissionError) {
-            case "1": //server cannot identify replay
-              Log.ui("ERR_PERM_REPLAY", S.ERROR_UNKNOWN_REPLAY);
-              errorCode = Consts.ERR_PERM_REPLAY;
-              break;
-            case "2": //only one replay can run at a time per IP
-              Log.ui("ERR_PERM_IP", S.ERROR_IP_CONNECTED);
-              errorCode = Consts.ERR_PERM_IP;
-              break;
-            case "3": //server CPU > 95%, disk > 95%, or bandwidth > 2000 Mbps
-              Log.ui("ERR_PERM_RES", S.ERROR_LOW_RESOURCES);
-              errorCode = Consts.ERR_PERM_RES;
-              break;
-            default:
-              Log.ui("ERR_PERM_UNK", S.ERROR_UNKNOWN);
-              errorCode = Consts.ERR_PERM_UNK;
+          String permissionError = permission[1].trim();
+          if (status.equals("0")) {
+            int errorCode;
+            // These are the different errors that server can report
+            switch (permissionError) {
+              case "1": //server cannot identify replay
+                Log.ui("ERR_PERM_REPLAY", S.ERROR_UNKNOWN_REPLAY);
+                errorCode = Consts.ERR_PERM_REPLAY;
+                break;
+              case "2": //only one replay can run at a time per IP
+                Log.ui("ERR_PERM_IP", S.ERROR_IP_CONNECTED);
+                errorCode = Consts.ERR_PERM_IP;
+                break;
+              case "3": //server CPU > 95%, disk > 95%, or bandwidth > 2000 Mbps
+                Log.ui("ERR_PERM_RES", S.ERROR_LOW_RESOURCES);
+                errorCode = Consts.ERR_PERM_RES;
+                break;
+              default:
+                Log.ui("ERR_PERM_UNK", S.ERROR_UNKNOWN);
+                errorCode = Consts.ERR_PERM_UNK;
+            }
+            return errorCode;
           }
-          return errorCode;
-        }
 
-        int numOfTimeSlices = Integer.parseInt(permission[2].trim(), 10);
+          numOfTimeSlices.add(Integer.parseInt(permission[2].trim(), 10));
+        }
 
         /*
          * Step 3: Send noIperf.
          */
-        sideChannel.sendIperf(); // always send noIperf here
+        for (CombinedSideChannel sc : sideChannels) {
+          sc.sendIperf(); // always send noIperf here
+        }
 
         /*
          * Step 4: Send device info.
          */
-        sideChannel.sendMobileStats(Config.sendMobileStats);
+        for (CombinedSideChannel sc : sideChannels) {
+          sc.sendMobileStats(Config.sendMobileStats);
+        }
 
         /*
          * Step 5: Get port mapping from server.
@@ -1007,11 +1032,17 @@ public class Replay {
          */
         Log.ui("updateStatus", iteration + "/" + types.length + " " + S.RECEIVE_SERVER_PORT_MAPPING);
 
-        HashMap<String, HashMap<String, HashMap<String, ServerInstance>>> serverPortsMap
-                = sideChannel.receivePortMappingNonBlock();
-        UDPReplayInfoBean udpReplayInfoBean = new UDPReplayInfoBean();
-        udpReplayInfoBean.setSenderCount(sideChannel.receiveSenderCount());
-        Log.i("Replay", "Successfully received serverPortsMap and senderCount!");
+        ArrayList<HashMap<String, HashMap<String, HashMap<String, ServerInstance>>>> serverPortsMaps
+                = new ArrayList<>();
+        ArrayList<UDPReplayInfoBean> udpReplayInfoBeans = new ArrayList<>();
+        for (CombinedSideChannel sc : sideChannels) {
+                serverPortsMaps.add(sc.receivePortMappingNonBlock());
+          UDPReplayInfoBean udpReplayInfoBean = new UDPReplayInfoBean();
+          udpReplayInfoBean.setSenderCount(sc.receiveSenderCount());
+          udpReplayInfoBeans.add(udpReplayInfoBean);
+          Log.i("Replay", "Channel " + sc.getId() + ": Successfully received"
+                  + " serverPortsMap and senderCount!");
+        }
 
         /*
          * Step 6: Create TCP clients from CSPairs and UDP clients from client ports.
@@ -1019,96 +1050,136 @@ public class Replay {
         Log.ui("updateStatus", iteration + "/" + types.length + " " + S.CREATE_TCP_CLIENT);
 
         //map of all cs pairs to TCP clients for a replay
-        HashMap<String, CTCPClient> CSPairMapping = new HashMap<>();
+        ArrayList<HashMap<String, CTCPClient>> CSPairMappings = new ArrayList<>();
 
         //create TCP clients
-        for (String csp : appData.getTcpCSPs()) {
-          //get server IP and port
-          String destIP = csp.substring(csp.lastIndexOf('-') + 1,
-                  csp.lastIndexOf("."));
-          String destPort = csp.substring(csp.lastIndexOf('.') + 1);
+        for (CombinedSideChannel sc : sideChannels) {
+          HashMap<String, CTCPClient> CSPairMapping = new HashMap<>();
+          for (String csp : appData.getTcpCSPs()) {
+            //get server IP and port
+            String destIP = csp.substring(csp.lastIndexOf('-') + 1,
+                    csp.lastIndexOf("."));
+            String destPort = csp.substring(csp.lastIndexOf('.') + 1);
 
-          //get the server
-          ServerInstance instance;
-          try {
-            instance = Objects.requireNonNull(Objects.requireNonNull(
-                    serverPortsMap.get("tcp")).get(destIP)).get(destPort);
-          } catch (NullPointerException e) {
-            Log.e("Replay", "Cannot get instance", e);
-            Log.ui("ERR_CONN_INST", S.ERROR_NO_CONNECTION);
-            return Consts.ERR_CONN_INST;
+            //get the server
+            ServerInstance instance;
+            try {
+              instance = Objects.requireNonNull(Objects.requireNonNull(
+                      serverPortsMaps.get(sc.getId()).get("tcp")).get(destIP)).get(destPort);
+            } catch (NullPointerException e) {
+              Log.e("Replay", "Cannot get instance", e);
+              Log.ui("ERR_CONN_INST", S.ERROR_NO_CONNECTION);
+              return Consts.ERR_CONN_INST;
+            }
+            assert instance != null;
+            if (instance.server.trim().equals(""))
+              // Use a setter instead probably
+              instance.server = servers.get(sc.getId()); // serverPortsMap.get(destPort);
+
+            //create the client
+            CTCPClient c = new CTCPClient(csp, instance.server,
+                    Integer.parseInt(instance.port),
+                    appData.getReplayName(), Config.publicIP, false);
+            CSPairMapping.put(csp, c);
           }
-          assert instance != null;
-          if (instance.server.trim().equals(""))
-            // Use a setter instead probably
-            instance.server = server; // serverPortsMap.get(destPort);
-
-          //create the client
-          CTCPClient c = new CTCPClient(csp, instance.server,
-                  Integer.parseInt(instance.port),
-                  appData.getReplayName(), Config.publicIP, false);
-          CSPairMapping.put(csp, c);
+          CSPairMappings.add(CSPairMapping);
+          Log.i("Replay", "Channel " + sc.getId() + ": created clients from CSPairs");
+          Log.d("Replay", "Channel " + sc.getId() + ": Size of CSPairMapping is "
+                  + CSPairMapping.size());
         }
-        Log.i("Replay", "created clients from CSPairs");
 
         Log.ui("updateStatus", iteration + "/" + types.length + " " + S.CREATE_UDP_CLIENT);
 
         //map of all client ports to UDP clients for a replay
-        HashMap<String, CUDPClient> udpPortMapping = new HashMap<>();
+        ArrayList<HashMap<String, CUDPClient>> udpPortMappings = new ArrayList<>();
 
         //create client for each UDP port
-        for (String originalClientPort : appData.getUdpClientPorts()) {
-          CUDPClient c = new CUDPClient(Config.publicIP);
-          udpPortMapping.put(originalClientPort, c);
+        for (CombinedSideChannel sc : sideChannels) {
+          HashMap<String, CUDPClient> udpPortMapping = new HashMap<>();
+          for (String originalClientPort : appData.getUdpClientPorts()) {
+            CUDPClient c = new CUDPClient(Config.publicIP);
+            udpPortMapping.put(originalClientPort, c);
+          }
+          udpPortMappings.add(udpPortMapping);
+          Log.i("Replay", "Channel " + sc.getId() + ": created clients from udpClientPorts");
+          Log.d("Replay", "Channel " + sc.getId() + ": Size of udpPortMapping is "
+                  + udpPortMapping.size());
         }
-
-        Log.i("Replay", "created clients from udpClientPorts");
-        Log.d("Replay", "Size of CSPairMapping is " + CSPairMapping.size());
-        Log.d("Replay", "Size of udpPortMapping is " + udpPortMapping.size());
 
         /*
          * Step 7: Start notifier for UDP.
          */
         Log.ui("updateStatus", iteration + "/" + types.length + " " + S.RUN_NOTF);
 
-        CombinedNotifierThread notifier = sideChannel.notifierCreator(udpReplayInfoBean);
-        Thread notfThread = new Thread(notifier);
-        notfThread.start();
+        ArrayList<CombinedNotifierThread> notifiers = new ArrayList<>();
+        ArrayList<Thread> notfThreads = new ArrayList<>();
+        for (CombinedSideChannel sc : sideChannels) {
+          CombinedNotifierThread notifier = sc.notifierCreator(udpReplayInfoBeans.get(sc.getId()));
+          notifiers.add(notifier);
+          Thread notfThread = new Thread(notifier);
+          notfThread.start();
+          notfThreads.add(notfThread);
+        }
 
         /*
          * Step 8: Start receiver to log throughputs on a given interval.
          */
         Log.ui("updateStatus", iteration + "/" + types.length + " " + S.RUN_RECEIVER);
 
-        CombinedAnalyzerTask analyzerTask = new CombinedAnalyzerTask(app.getTime() / 2.0,
-                appData.isTCP(), numOfTimeSlices, runPortTests); //throughput logged
-        Timer analyzerTimer = new Timer(true); //timer to log throughputs on interval
-        analyzerTimer.scheduleAtFixedRate(analyzerTask, 0, analyzerTask.getInterval());
+        ArrayList<CombinedAnalyzerTask> analyzerTasks = new ArrayList<>();
+        ArrayList<Timer> analyzerTimers = new ArrayList<>();
+        ArrayList<CombinedReceiverThread> receivers = new ArrayList<>();
+        ArrayList<Thread> rThreads = new ArrayList<>();
+        for (CombinedSideChannel sc : sideChannels) {
+          CombinedAnalyzerTask analyzerTask = new CombinedAnalyzerTask(app.getTime() / 2.0,
+                  appData.isTCP(), numOfTimeSlices.get(sc.getId()), runPortTests); //throughput logged
+          Timer analyzerTimer = new Timer(true); //timer to log throughputs on interval
+          analyzerTimer.scheduleAtFixedRate(analyzerTask, 0, analyzerTask.getInterval());
+          analyzerTasks.add(analyzerTask);
+          analyzerTimers.add(analyzerTimer);
 
-        CombinedReceiverThread receiver = new CombinedReceiverThread(
-                udpReplayInfoBean, jitterBean, analyzerTask); //receiver for udp
-        Thread rThread = new Thread(receiver);
-        rThread.start();
+          CombinedReceiverThread receiver = new CombinedReceiverThread(
+                  udpReplayInfoBeans.get(sc.getId()), jitterBeans.get(sc.getId()), analyzerTask); //receiver for udp
+          receivers.add(receiver);
+          Thread rThread = new Thread(receiver);
+          rThread.start();
+          rThreads.add(rThread);
+        }
 
         /*
          * Step 9: Send packets to server.
          */
         Log.ui("updateStatus", iteration + "/" + types.length + " " + S.RUN_SENDER);
 
-        CombinedQueue queue = new CombinedQueue(appData.getQ(), jitterBean, analyzerTask,
+        CombinedQueue queue = new CombinedQueue(appData.getQ(), jitterBeans, analyzerTasks,
                 runPortTests ? Consts.REPLAY_PORT_TIMEOUT : Consts.REPLAY_APP_TIMEOUT);
         long timeStarted = System.nanoTime(); //start time for sending
         //send packets
-        queue.run(CSPairMapping, udpPortMapping, udpReplayInfoBean, serverPortsMap.get("udp"),
-                Config.timing, server);
+        ArrayList<HashMap<String, HashMap<String, ServerInstance>>> udpServerMappings = new ArrayList<>();
+        for (HashMap<String, HashMap<String, HashMap<String, ServerInstance>>> m : serverPortsMaps) {
+          udpServerMappings.add(m.get("udp"));
+        }
+
+        queue.run(CSPairMappings, udpPortMappings, udpReplayInfoBeans, udpServerMappings,
+                Config.timing, servers);
 
         //all packets sent - stop logging and receiving
         queue.stopTimers();
-        analyzerTimer.cancel();
-        notifier.doneSending = true;
-        notfThread.join();
-        receiver.keepRunning = false;
-        rThread.join();
+        for (Timer t : analyzerTimers) {
+          t.cancel();
+        }
+        for (CombinedNotifierThread n : notifiers) {
+          n.doneSending = true;
+        }
+        for (Thread t : notfThreads) {
+          t.join();
+        }
+        for (CombinedReceiverThread r : receivers) {
+          r.keepRunning = false;
+        }
+        for (Thread t : rThreads) {
+          t.join();
+        }
 
         /*
          * Step 10: Tell server that replay is finished.
@@ -1117,47 +1188,58 @@ public class Replay {
 
         //time to send all packets
         double duration = ((double) (System.nanoTime() - timeStarted)) / 1000000000;
-        sideChannel.sendDone(duration);
+        for (CombinedSideChannel sc : sideChannels) {
+          sc.sendDone(duration);
+        }
         Log.d("Replay", "replay finished using time " + duration + " s");
 
         /*
          * Step 11: Send throughputs and slices to server.
          */
-        ArrayList<ArrayList<Double>> avgThroughputsAndSlices
-                = analyzerTask.getAverageThroughputsAndSlices();
-        sideChannel.sendTimeSlices(avgThroughputsAndSlices);
+        for (CombinedSideChannel sc : sideChannels) {
+          sc.sendTimeSlices(analyzerTasks.get(sc.getId()).getAverageThroughputsAndSlices());
+        }
 
+        //TODO: is this necessary?
         //set avg of port 443, so it can be displayed if port being tested is blocked
         if (runPortTests && channel.equalsIgnoreCase("random")) {
-          app.randomThroughput = analyzerTask.getAvgThroughput();
+          app.randomThroughput = analyzerTasks.get(0).getAvgThroughput();
         }
 
         // TODO find a better way to do this
         // Send Result;No and wait for OK before moving forward
-        while (sideChannel.getResult(Config.result)) {
-          Thread.sleep(500);
+        for (CombinedSideChannel sc : sideChannels) {
+          while (sc.getResult(Config.result)) {
+            Thread.sleep(500);
+          }
         }
 
         /*
          * Step 12: Close side channel and TCP/UDP sockets.
          */
         // closing side channel socket
-        sideChannel.closeSideChannelSocket();
+        for (CombinedSideChannel sc : sideChannels) {
+          sc.closeSideChannelSocket();
+        }
 
         //close TCP sockets
-        for (String csp : appData.getTcpCSPs()) {
-          CTCPClient c = CSPairMapping.get(csp);
-          if (c != null) {
-            c.close();
+        for (HashMap<String, CTCPClient> mapping : CSPairMappings) {
+          for (String csp : appData.getTcpCSPs()) {
+            CTCPClient c = mapping.get(csp);
+            if (c != null) {
+              c.close();
+            }
           }
         }
         Log.i("CleanUp", "Closed CSPairs 1");
 
         //close UDP sockets
-        for (String originalClientPort : appData.getUdpClientPorts()) {
-          CUDPClient c = udpPortMapping.get(originalClientPort);
-          if (c != null) {
-            c.close();
+        for (HashMap<String, CUDPClient> mapping : udpPortMappings) {
+          for (String originalClientPort : appData.getUdpClientPorts()) {
+            CUDPClient c = mapping.get(originalClientPort);
+            if (c != null) {
+              c.close();
+            }
           }
         }
 
@@ -1199,30 +1281,37 @@ public class Replay {
    */
   private int getResults(boolean portBlocked) {
     try {
-      JSONObject result = null;
+      ArrayList<JSONObject> results = new ArrayList<>();
       if (!portBlocked) { //skip Step 1 and step 2 if port blocked
         /*
          * Step 1: Ask server to analyze a test.
          */
-        for (int ask4analysisRetry = 5; ask4analysisRetry > 0; ask4analysisRetry--) {
-          result = ask4analysis(randomID, app.getHistoryCount()); //request analysis
-          if (result == null) {
-            Log.e("Result Channel", "ask4analysis returned null!");
-          } else {
-            break;
+        JSONObject resp;
+        for (String server : analyzerServerUrls) {
+          for (int ask4analysisRetry = 3; ask4analysisRetry > 0; ask4analysisRetry--) {
+            resp = ask4analysis(server, randomID, app.getHistoryCount()); //request analysis
+            if (resp == null) {
+              Log.e("Result Channel", server + ": ask4analysis returned null!");
+            } else {
+              results.add(resp);
+              break;
+            }
           }
         }
 
-        if (result == null) {
+        if (results.size() != analyzerServerUrls.size()) {
           Log.ui("ERR_ANA_NULL", S.ERROR_ANALYSIS_FAIL);
           return Consts.ERR_ANA_NULL;
         }
 
-        boolean success = result.getBoolean("success");
-        if (!success) {
-          Log.e("Result Channel", "ask4analysis failed!");
-          Log.ui("ERR_ANA_NO_SUC", S.ERROR_ANALYSIS_FAIL);
-          return Consts.ERR_ANA_NO_SUC;
+        boolean success;
+        for (JSONObject result : results) {
+          success = result.getBoolean("success");
+          if (!success) {
+            Log.e("Result Channel", "ask4analysis failed!");
+            Log.ui("ERR_ANA_NO_SUC", S.ERROR_ANALYSIS_FAIL);
+            return Consts.ERR_ANA_NO_SUC;
+          }
         }
 
         Log.ui("updateStatus", S.WAITING);
@@ -1239,51 +1328,55 @@ public class Replay {
         /*
          * Step 2: Get result of analysis from server.
          */
+        results.clear();
         String resultStatus;
         int exitStatus;
-        for (int i = 0; ; i++) { //3 attempts to get analysis from sever
-          result = getSingleResult(randomID, app.getHistoryCount()); //get result
+        for (String url : analyzerServerUrls) {
+          for (int i = 0; ; i++) { //3 attempts to get analysis from sever
+            resp = getSingleResult(url, randomID, app.getHistoryCount()); //get result
 
-          if (result == null) {
-            resultStatus = "ERR_RSLT_NULL";
-            exitStatus = Consts.ERR_RSLT_NULL;
-            Log.e("Result Channel", "getSingleResult returned null!");
-          } else {
-            success = result.getBoolean("success");
-            if (success) { //success
-              if (result.has("response")) { //success and has response
-                Log.i("Result Channel", "retrieve result succeeded");
-                break;
-              } else { //success but response is missing
-                resultStatus = "ERR_RSLT_NO_RESP";
-                exitStatus = Consts.ERR_RSLT_NO_RESP;
-                Log.w("Result Channel", "Server result not ready");
+            if (resp == null) {
+              resultStatus = "ERR_RSLT_NULL";
+              exitStatus = Consts.ERR_RSLT_NULL;
+              Log.e("Result Channel", url + ": getSingleResult returned null!");
+            } else {
+              success = resp.getBoolean("success");
+              if (success) { //success
+                if (resp.has("response")) { //success and has response
+                  Log.i("Result Channel", url + ": retrieve result succeeded");
+                  results.add(resp);
+                  break;
+                } else { //success but response is missing
+                  resultStatus = "ERR_RSLT_NO_RESP";
+                  exitStatus = Consts.ERR_RSLT_NO_RESP;
+                  Log.w("Result Channel", url + ": Server result not ready");
+                }
+              } else if (resp.has("error")) {
+                resultStatus = "ERR_RSLT_NO_SUC";
+                exitStatus = Consts.ERR_RSLT_NO_SUC;
+                Log.e("Result Channel", "ERROR: " + url + ": " + resp.getString("error"));
+              } else {
+                resultStatus = "ERR_RSLT_NO_SUC";
+                exitStatus = Consts.ERR_RSLT_NO_SUC;
+                Log.e("Result Channel", "Error: Some error getting results.");
               }
-            } else if (result.has("error")) {
-              resultStatus = "ERR_RSLT_NO_SUC";
-              exitStatus = Consts.ERR_RSLT_NO_SUC;
-              Log.e("Result Channel", "ERROR: " + result.getString("error"));
-            } else {
-              resultStatus = "ERR_RSLT_NO_SUC";
-              exitStatus = Consts.ERR_RSLT_NO_SUC;
-              Log.e("Result Channel", "Error: Some error getting results.");
             }
-          }
 
-          if (i < 3) { //wait 2 seconds to try again
-            try {
-              Thread.sleep(2000);
-            } catch (InterruptedException e) {
-              Log.w("Result Channel", "Sleep interrupted", e);
-            }
-          } else { //error after 3rd attempt
-            if (runPortTests) { //"the port 80 issue"
-              portBlocked = true;
-              Log.i("Result Channel", "Can't retrieve result, port blocked");
-              break;
-            } else {
-              Log.ui(resultStatus, S.NOT_ALL_TCP_SENT_TEXT);
-              return exitStatus;
+            if (i < 3) { //wait 2 seconds to try again
+              try {
+                Thread.sleep(2000);
+              } catch (InterruptedException e) {
+                Log.w("Result Channel", "Sleep interrupted", e);
+              }
+            } else { //error after 3rd attempt
+              if (runPortTests) { //"the port 80 issue"
+                portBlocked = true;
+                Log.i("Result Channel", "Can't retrieve result, port blocked");
+                break;
+              } else {
+                Log.ui(resultStatus, S.NOT_ALL_TCP_SENT_TEXT);
+                return exitStatus;
+              }
             }
           }
         }
@@ -1292,136 +1385,139 @@ public class Replay {
       /*
        * Step 3: Parse the analysis results.
        */
-      JSONObject response = portBlocked ? new JSONObject() : result.getJSONObject("response");
+      int i = 0;
+      for (JSONObject result : results) {
+        JSONObject response = portBlocked ? new JSONObject() : result.getJSONObject("response");
 
-      if (portBlocked) { //generate result if port blocked
-        response.put("userID", randomID);
-        response.put("historyCount", historyCount);
-        response.put("replayName", app.getDataFile());
-        response.put("area_test", -1);
-        response.put("ks2pVal", -1);
-        response.put("ks2_ratio_test", -1);
-        response.put("xput_avg_original", 0);
-        response.put("xput_avg_test", app.randomThroughput); //calculated in runTest() Step 11
-      }
+        if (portBlocked) { //generate result if port blocked
+          response.put("userID", randomID);
+          response.put("historyCount", historyCount);
+          response.put("replayName", app.getDataFile());
+          response.put("area_test", -1);
+          response.put("ks2pVal", -1);
+          response.put("ks2_ratio_test", -1);
+          response.put("xput_avg_original", 0);
+          response.put("xput_avg_test", app.randomThroughput); //calculated in runTest() Step 11
+        }
 
-      Log.d("Result Channel", "SERVER RESPONSE: " + response.toString());
+        Log.d("Result Channel", "SERVER RESPONSE " + i++ + ": " + response.toString());
 
-      String userID = response.getString("userID");
-      int historyCount = response.getInt("historyCount");
-      double area_test = response.getDouble("area_test");
-      double ks2pVal = response.getDouble("ks2pVal");
-      double ks2RatioTest = response.getDouble("ks2_ratio_test");
-      double xputOriginal = response.getDouble("xput_avg_original");
-      double xputTest = response.getDouble("xput_avg_test");
+        String userID = response.getString("userID");
+        int historyCount = response.getInt("historyCount");
+        double area_test = response.getDouble("area_test");
+        double ks2pVal = response.getDouble("ks2pVal");
+        double ks2RatioTest = response.getDouble("ks2_ratio_test");
+        double xputOriginal = response.getDouble("xput_avg_original");
+        double xputTest = response.getDouble("xput_avg_test");
 
-      // sanity check
-      if ((!userID.trim().equalsIgnoreCase(randomID))
-              || (historyCount != app.getHistoryCount())) {
-        Log.e("Result Channel", "Result didn't pass sanity check! "
-                + "correct id: " + randomID
-                + " correct historyCount: " + app.getHistoryCount());
-        Log.e("Result Channel", "Result content: " + response.toString());
-        Log.ui("ERR_RSLT_ID_HC", S.ERROR_RESULT);
-        return Consts.ERR_RSLT_ID_HC;
-      }
+        // sanity check
+        if ((!userID.trim().equalsIgnoreCase(randomID))
+                || (historyCount != app.getHistoryCount())) {
+          Log.e("Result Channel", "Result didn't pass sanity check! "
+                  + "correct id: " + randomID
+                  + " correct historyCount: " + app.getHistoryCount());
+          Log.e("Result Channel", "Result content: " + response.toString());
+          Log.ui("ERR_RSLT_ID_HC", S.ERROR_RESULT);
+          return Consts.ERR_RSLT_ID_HC;
+        }
 
-      /*
-       * Step 4: Determine if there is differentiation.
-       */
-      //area test threshold default is 50%; ks2 p value test threshold default is 1%
-      //if default switch is on and one of the throughputs is over 10 Mbps, change the
-      //area threshold to 30%, which increases chance of Wehe finding differentiation.
-      //If the throughputs are over 10 Mbps, the difference between the two throughputs
-      //would need to be much larger than smaller throughputs for differentiation to be
-      //triggered, which may confuse users
-      //TODO: might have to relook at thresholds and do some formal research on optimal
-      // thresholds. Currently thresholds chosen ad-hoc
-      if (useDefaultThresholds && (xputOriginal > 10 || xputTest > 10)) {
-        a_threshold = 30;
-      }
+        /*
+         * Step 4: Determine if there is differentiation.
+         */
+        //area test threshold default is 50%; ks2 p value test threshold default is 1%
+        //if default switch is on and one of the throughputs is over 10 Mbps, change the
+        //area threshold to 30%, which increases chance of Wehe finding differentiation.
+        //If the throughputs are over 10 Mbps, the difference between the two throughputs
+        //would need to be much larger than smaller throughputs for differentiation to be
+        //triggered, which may confuse users
+        //TODO: might have to relook at thresholds and do some formal research on optimal
+        // thresholds. Currently thresholds chosen ad-hoc
+        if (useDefaultThresholds && (xputOriginal > 10 || xputTest > 10)) {
+          a_threshold = 30;
+        }
 
-      double area_test_threshold = (double) a_threshold / 100;
-      double ks2pVal_threshold = (double) ks2pvalue_threshold / 100;
-      //double ks2RatioTest_threshold = (double) 95 / 100;
+        double area_test_threshold = (double) a_threshold / 100;
+        double ks2pVal_threshold = (double) ks2pvalue_threshold / 100;
+        //double ks2RatioTest_threshold = (double) 95 / 100;
 
-      boolean aboveArea = Math.abs(area_test) >= area_test_threshold;
-      //boolean trustPValue = ks2RatioTest >= ks2RatioTest_threshold;
-      boolean belowP = ks2pVal < ks2pVal_threshold;
-      boolean differentiation = false;
-      boolean inconclusive = false;
+        boolean aboveArea = Math.abs(area_test) >= area_test_threshold;
+        //boolean trustPValue = ks2RatioTest >= ks2RatioTest_threshold;
+        boolean belowP = ks2pVal < ks2pVal_threshold;
+        boolean differentiation = false;
+        boolean inconclusive = false;
 
-      if (portBlocked) {
-        differentiation = true;
-      } else if (aboveArea) {
-        if (belowP) {
+        if (portBlocked) {
           differentiation = true;
-        } else {
-          inconclusive = true;
-        }
-      }
-
-      // TODO uncomment following code when you want differentiation to occur
-      //differentiation = true;
-      //inconclusive = true;
-
-      /*
-       * Step 5: Save and display results to user. Rerun test if necessary.
-       */
-      //determine if the test needs to be rerun
-      if ((inconclusive || differentiation) && confirmationReplays && !rerun) {
-        Log.ui("updateStatus", S.CONFIRMATION_REPLAY);
-        try { //wait 2 seconds so user can read message before it disappears
-          Thread.sleep(2000);
-        } catch (InterruptedException e) {
-          Log.w("Result Channel", "Sleep interrupted", e);
-        }
-        rerun = true;
-        return runTest(); //return so that first result isn't saved
-      }
-
-      String saveStatus; //save to disk, so it can appear in the correct language in prev results
-      if (inconclusive) {
-        saveStatus = "inconclusive";
-        Log.ui("RESULT", S.INCONCLUSIVE);
-      } else if (differentiation) {
-        saveStatus = "has diff";
-        Log.ui("RESULT", S.HAS_DIFF);
-
-        String error = runPortTests ? S.TEST_BLOCKED_PORT_TEXT : S.TEST_BLOCKED_APP_TEXT;
-        if (!portBlocked) {
-          if (xputOriginal > xputTest) {
-            error = runPortTests ? S.TEST_PRIORITIZED_PORT_TEXT : S.TEST_PRIORITIZED_APP_TEXT;
+        } else if (aboveArea) {
+          if (belowP) {
+            differentiation = true;
           } else {
-            error = runPortTests ? S.TEST_THROTTLED_PORT_TEXT : S.TEST_THROTTLED_APP_TEXT;
+            inconclusive = true;
           }
         }
-        Log.ui("RESULT_MSG", error);
-      } else {
-        saveStatus = "no diff";
-        Log.ui("RESULT", S.NO_DIFF);
+
+        // TODO uncomment following code when you want differentiation to occur
+        //differentiation = true;
+        //inconclusive = true;
+
+        /*
+         * Step 5: Save and display results to user. Rerun test if necessary.
+         */
+        //determine if the test needs to be rerun
+        if ((inconclusive || differentiation) && confirmationReplays && !rerun) {
+          Log.ui("updateStatus", S.CONFIRMATION_REPLAY);
+          try { //wait 2 seconds so user can read message before it disappears
+            Thread.sleep(2000);
+          } catch (InterruptedException e) {
+            Log.w("Result Channel", "Sleep interrupted", e);
+          }
+          rerun = true;
+          return runTest(); //return so that first result isn't saved
+        }
+
+        String saveStatus; //save to disk, so it can appear in the correct language in prev results
+        if (inconclusive) {
+          saveStatus = "inconclusive";
+          Log.ui("RESULT", S.INCONCLUSIVE);
+        } else if (differentiation) {
+          saveStatus = "has diff";
+          Log.ui("RESULT", S.HAS_DIFF);
+
+          String error = runPortTests ? S.TEST_BLOCKED_PORT_TEXT : S.TEST_BLOCKED_APP_TEXT;
+          if (!portBlocked) {
+            if (xputOriginal > xputTest) {
+              error = runPortTests ? S.TEST_PRIORITIZED_PORT_TEXT : S.TEST_PRIORITIZED_APP_TEXT;
+            } else {
+              error = runPortTests ? S.TEST_THROTTLED_PORT_TEXT : S.TEST_THROTTLED_APP_TEXT;
+            }
+          }
+          Log.ui("RESULT_MSG", error);
+        } else {
+          saveStatus = "no diff";
+          Log.ui("RESULT", S.NO_DIFF);
+        }
+
+        app.area_test = area_test;
+        app.ks2pVal = ks2pVal;
+        app.ks2pRatio = ks2RatioTest;
+        app.originalThroughput = xputOriginal;
+        app.randomThroughput = xputTest;
+
+        Log.i("Result Channel", "writing result to json array");
+        response.put("isPort", runPortTests);
+        response.put("appName", app.getName());
+        response.put("appImage", app.getImage());
+        response.put("status", saveStatus);
+        response.put("date", new Date().getTime());
+        response.put("areaThreshold", area_test_threshold);
+        response.put("ks2pThreshold", ks2pVal_threshold);
+        response.put("isIPv6", isIPv6);
+        response.put("server", serverDisplay);
+        response.put("carrier", "myCarrier");
+        Log.d("response", response.toString());
+
+        Log.ui("FinalResults", response.toString()); //save user results to UI log file
       }
-
-      app.area_test = area_test;
-      app.ks2pVal = ks2pVal;
-      app.ks2pRatio = ks2RatioTest;
-      app.originalThroughput = xputOriginal;
-      app.randomThroughput = xputTest;
-
-      Log.i("Result Channel", "writing result to json array");
-      response.put("isPort", runPortTests);
-      response.put("appName", app.getName());
-      response.put("appImage", app.getImage());
-      response.put("status", saveStatus);
-      response.put("date", new Date().getTime());
-      response.put("areaThreshold", area_test_threshold);
-      response.put("ks2pThreshold", ks2pVal_threshold);
-      response.put("isIPv6", isIPv6);
-      response.put("server", serverDisplay);
-      response.put("carrier", "myCarrier");
-      Log.d("response", response.toString());
-
-      Log.ui("FinalResults", response.toString()); //save user results to UI log file
     } catch (JSONException e) {
       Log.e("Result Channel", "parsing json error", e);
       Log.ui("ERR_BAD_JSON", S.ERROR_JSON);

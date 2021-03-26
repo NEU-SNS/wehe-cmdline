@@ -71,7 +71,7 @@ public class Log {
    * @param tag  tag of log
    * @param msg  message to log
    */
-  private static void appendLog(String type, int typeI, String tag, String msg) {
+  private static synchronized void appendLog(String type, int typeI, String tag, String msg) {
     now = LocalDateTime.now();
     tmp.setLength(0);
     tmp.append(dtf.format(now)).append(type).append(tag).append(": ").append(msg).append("\n");

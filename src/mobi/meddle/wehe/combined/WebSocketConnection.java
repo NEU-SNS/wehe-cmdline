@@ -24,24 +24,27 @@ import mobi.meddle.wehe.util.Log;
  * nothing is sent or received. The connection is closed when the test is over. MLab automatically
  * times out after 5 minutes, so a test must run within that period. A new connection is made for
  * each test. The Tyrus library is used for the WebSocket implementation for this client.
- *
+ * <p>
  * TODO: get better WebSocket library? Does not work on Android < 8; works on > 8
  */
 @ClientEndpoint
 public class WebSocketConnection {
   private Session userSession = null;
   private final ExecutorService executorService;
+  private final int id;
 
   /**
    * Constructor which makes a connection to the client.
    *
+   * @param id        the id number of the socket (used for debugging statements)
    * @param serverURI the URI to connect to
    * @throws DeploymentException issues connecting to server - on older Android APIs, an error may
    *                             be thrown because of a failed SSL handshake. For those APIs, an
    *                             error message is displayed to the user telling them to use a
    *                             different server (implemented in Replay)
    */
-  public WebSocketConnection(URI serverURI) throws DeploymentException, InterruptedException {
+  public WebSocketConnection(int id, URI serverURI) throws DeploymentException, InterruptedException {
+    this.id = id;
     WebSocketContainer container = ContainerProvider.getWebSocketContainer(); //magic!
     executorService = Executors.newSingleThreadExecutor();
     final boolean[] success = {false};
@@ -53,7 +56,7 @@ public class WebSocketConnection {
           container.connectToServer(WebSocketConnection.this, serverURI);
           success[0] = true;
         } catch (DeploymentException | IOException e) {
-          Log.e("WebSocket", "Failed connecting to WebSocket", e);
+          Log.e("WebSocket", "WebSocket " + id + ": Failed connecting to WebSocket", e);
         }
       }
     });
@@ -61,7 +64,16 @@ public class WebSocketConnection {
     if (!success[0]) {
       throw new DeploymentException("Couldn't connect to WebSocket");
     }
-    Log.i("WebSocket", "Connected to socket: " + serverURI.toString());
+    Log.i("WebSocket", "WebSocket " + id + ": Connected to socket: " + serverURI.toString());
+  }
+
+  /**
+   * Get the WebSocket's ID number.
+   *
+   * @return id
+   */
+  public int getId() {
+    return id;
   }
 
   /**
@@ -74,7 +86,7 @@ public class WebSocketConnection {
   public void onOpen(Session userSession) {
     this.userSession = userSession;
     userSession.setMaxIdleTimeout(0); //no timeout caused by client
-    Log.i("WebSocket", "WebSocket opened");
+    Log.i("WebSocket", "WebSocket " + id + " opened");
   }
 
   /**
@@ -88,7 +100,7 @@ public class WebSocketConnection {
   public void onClose(Session userSession, CloseReason reason) {
     this.userSession = null;
     executorService.shutdown();
-    Log.i("WebSocket", "WebSocket closed");
+    Log.i("WebSocket", "WebSocket " + id + " closed");
     Log.d("WebSocket", "Close code: " + reason.getCloseCode() + " " + reason.getReasonPhrase());
   }
 
@@ -101,7 +113,7 @@ public class WebSocketConnection {
         this.userSession.close();
       }
     } catch (IOException e) {
-      Log.e("WebSocket", "Socket failed to close", e);
+      Log.e("WebSocket", "Socket " + id + " failed to close", e);
     }
   }
 

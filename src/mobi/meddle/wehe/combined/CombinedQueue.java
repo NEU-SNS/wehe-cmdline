@@ -27,15 +27,15 @@ import mobi.meddle.wehe.util.Log;
 public class CombinedQueue {
   volatile boolean ABORT = false; // for indicating abortion!
   volatile String abort_reason = null;
-  private final CombinedAnalyzerTask analyzerTask; //class that tracks throughput data
+  private final ArrayList<CombinedAnalyzerTask> analyzerTasks; //class that tracks throughput data
   private final ArrayList<RequestSet> q; //packets to send to server
   private long timeOrigin; //start time of replay
-  private long jitterTimeOrigin; //start time of replay
+  private final ArrayList<Long> jitterTimeOrigins = new ArrayList<>(); //start time of replay
   private final Semaphore sendSema; //for TCP
   private final Map<CTCPClient, Semaphore> recvSemaMap = new HashMap<>(); //for TCP
   int threads = 0; //number of TCP threads currently active
   private final ArrayList<Thread> cThreadList = new ArrayList<>(); //list of TCP threads
-  private final JitterBean jitterBean; // for jitter
+  private final ArrayList<JitterBean> jitterBeans; // for jitter
   private final boolean isUDP;
   private final int timeout;
   private final ArrayList<Timer> timers = new ArrayList<>();
@@ -43,17 +43,18 @@ public class CombinedQueue {
   /**
    * Constructor.
    *
-   * @param q            the list of packets to send to the server
-   * @param jitterBean   bean to keep track of packets sent to and received from the server
-   * @param analyzerTask the class that keeps track of the throughput data
-   * @param timeout      max number of seconds a TCP replay can send packets (5 sec less for UDP)
+   * @param q             the list of packets to send to the server
+   * @param jitterBeans   beans to keep track of UDP packets sent to and received from the server
+   * @param analyzerTasks the class that keeps track of the throughput data
+   * @param timeout       max number of seconds a TCP replay can send packets (5 sec less for UDP)
    */
-  public CombinedQueue(ArrayList<RequestSet> q, JitterBean jitterBean,
-                       CombinedAnalyzerTask analyzerTask, int timeout) {
+  public CombinedQueue(ArrayList<RequestSet> q, ArrayList<JitterBean> jitterBeans,
+                       ArrayList<CombinedAnalyzerTask> analyzerTasks, int timeout) {
     this.q = q;
-    this.jitterBean = jitterBean;
+    this.jitterBeans = jitterBeans;
     this.sendSema = new Semaphore(1);
-    this.analyzerTask = analyzerTask;
+    this.analyzerTasks = analyzerTasks;
+
     this.isUDP = q.size() > 0 && q.get(0).isUDP();
     this.timeout = isUDP ? timeout - 5 : timeout;
   }
@@ -63,84 +64,120 @@ public class CombinedQueue {
    * not receiving a response 2- Send tcp payload [and receive response] by calling next 3- Wait
    * until send_event is set --> sending is done
    *
-   * @param CSPairMapping     map of cs pairs to TCP connections for a replay
-   * @param udpPortMapping    map of client ports to UDP connections for a replay
-   * @param udpReplayInfoBean bean for UDP info - used to add a socket
-   * @param udpServerMapping  the UDP IP-to-port mappings from the giant list received from the
-   *                          server in receivePortMappingNonBlock() from CombinedSideChannel
-   * @param timing            true if the packets should be sent at the specified recorded time;
-   *                          false if packets should be sent as fast as possible
-   * @param server            the IP address of the server - used as the server if the server field
-   *                          in the ServerInstance is blank
+   * @param CSPairMappings     maps of cs pairs to TCP connections for a replay
+   * @param udpPortMappings    maps of client ports to UDP connections for a replay
+   * @param udpReplayInfoBeans beans for UDP info - used to add a socket
+   * @param udpServerMappings  the UDP IP-to-port mappings from the giant list received from the
+   *                           server in receivePortMappingNonBlock() from CombinedSideChannel
+   * @param timing             true if the packets should be sent at the specified recorded time;
+   *                           false if packets should be sent as fast as possible
+   * @param servers            the IP addresses of the servers - used as the server if the server
+   *                           field in the ServerInstance is blank
    */
-  public void run(HashMap<String, CTCPClient> CSPairMapping,
-                  HashMap<String, CUDPClient> udpPortMapping, UDPReplayInfoBean udpReplayInfoBean,
-                  HashMap<String, HashMap<String, ServerInstance>> udpServerMapping,
-                  Boolean timing, String server) {
+  public void run(ArrayList<HashMap<String, CTCPClient>> CSPairMappings,
+                  ArrayList<HashMap<String, CUDPClient>> udpPortMappings,
+                  ArrayList<UDPReplayInfoBean> udpReplayInfoBeans,
+                  ArrayList<HashMap<String, HashMap<String, ServerInstance>>> udpServerMappings,
+                  Boolean timing, ArrayList<String> servers) {
+    long curTime = System.nanoTime();
     this.timeOrigin = System.nanoTime();
-    this.jitterTimeOrigin = System.nanoTime();
+    for (JitterBean ignored : jitterBeans) {
+      jitterTimeOrigins.add(curTime);
+    }
 
-    int i = 1; // for calculating packets
-    int len = this.q.size(); // for jitter
-    double currentTime; //time in seconds since timeOrigin
-    int timeLeft = 30; //time in seconds until timeout for sending packets
     // @@@ start all the treads here
-    for (RequestSet RS : this.q) {
-      //TODO: find a better way to cancel than from passing in entire AsyncTask
-      // Currently, this method is blocking, so code in AsyncTask in Replay Activity can't
-      // cancel this for loop from sending packets to the server
-      if (ABORT) {
-        Log.i("Queue", "replay aborted!");
-        Log.ui("ABORTED", "aborted while sending packets");
-        break;
-      }
-      currentTime = (double) (System.nanoTime() - timeOrigin) / 1000000000.0; //nano sec to sec
+    ArrayList<Thread> tests = new ArrayList<>();
+    final int[] id_global = {-1};
+    Runnable sendPckts = new Runnable() {
+      @Override
+      public void run() {
+        id_global[0]++;
+        int id = id_global[0];
+        int i = 1; // for calculating packets
+        int numPackets = q.size(); // for jitter
+        double currentTime; //time in seconds since timeOrigin
+        int timeLeft = 30; //time in seconds until timeout for sending packets
+        for (RequestSet RS : q) {
+          //TODO: find a better way to cancel than from passing in entire AsyncTask
+          // Currently, this method is blocking, so code in AsyncTask in Replay Activity can't
+          // cancel this for loop from sending packets to the server
+          if (ABORT) {
+            Log.i("Queue", "Channel " + id + ": replay aborted!");
+            Log.ui("ABORTED", "aborted while sending packets");
+            break;
+          }
+          currentTime = (double) (System.nanoTime() - timeOrigin) / 1000000000.0; //nano sec to sec
 
-      //check for timeout sending packets
-      if (Consts.TIMEOUT_ENABLED && currentTime > timeout) {
-        Log.i("Queue", timeout + " second timeout reached for replay at time " + System.nanoTime());
-        break;
-      }
-
-      try {
-        if (isUDP) { //UDP
-          // adrian: sending udp is done in queue thread, no need to start
-          // new threads for udp since there is only one port
-          Log.i("Replay", "Sending udp packet " + i++ + "/" + len
-                  + " at " + currentTime + " seconds since start of replay");
-          nextUDP(RS, udpPortMapping, udpReplayInfoBean, udpServerMapping, timing, server);
-        } else { //TCP
-          //calculate time left to send - this becomes new timeout for socket for
-          //receiving response
-          if (Consts.TIMEOUT_ENABLED) {
-            timeLeft = timeout - (int) currentTime;
-            if (timeLeft <= 0) {
-              timeLeft = 1;
-            }
+          //check for timeout sending packets
+          if (Consts.TIMEOUT_ENABLED && currentTime > timeout) {
+            Log.i("Queue", "Channel " + id + ": " + timeout
+                    + " second timeout reached for replay at time " + System.nanoTime());
+            break;
           }
 
-          Semaphore recvSema = getRecvSemaLock(CSPairMapping.get(RS.getc_s_pair()));
-          recvSema.acquire();
+          try {
+            if (isUDP) { //UDP
+              // adrian: sending udp is done in queue thread, no need to start
+              // new threads for udp since there is only one port
+              Log.i("Replay", "Channel " + id + ": Sending udp packet " + i++ + "/"
+                      + numPackets + " at " + currentTime + " seconds since start of replay");
+              nextUDP(id, RS, udpPortMappings.get(id), udpReplayInfoBeans.get(id),
+                      udpServerMappings.get(id), timing, servers.get(id));
+            } else { //TCP
+              //calculate time left to send - this becomes new timeout for socket for
+              //receiving response
+              if (Consts.TIMEOUT_ENABLED) {
+                timeLeft = timeout - (int) currentTime;
+                if (timeLeft <= 0) {
+                  timeLeft = 1;
+                }
+              }
 
-          Log.i("Replay", "Sending tcp packet " + i++ + "/" + len
-                  + " at " + currentTime + " seconds since start of replay " + System.nanoTime());
+              Semaphore recvSema = getRecvSemaLock(CSPairMappings.get(id).get(RS.getc_s_pair()));
+              recvSema.acquire();
 
-          // adrian: every time when calling next we create and start a new thread
-          // adrian: here we start different thread according to the type of RS
-          nextTCP(CSPairMapping.get(RS.getc_s_pair()), RS, timing, sendSema, recvSema,
-                  timeLeft);
+              Log.i("Replay", "Channel " + id + ": Sending tcp packet " + i++ + "/" + numPackets
+                      + " at " + currentTime + " seconds since start of replay " + System.nanoTime());
 
-          sendSema.acquire();
+              // adrian: every time when calling next we create and start a new thread
+              // adrian: here we start different thread according to the type of RS
+              nextTCP(CSPairMappings.get(id).get(RS.getc_s_pair()), RS, timing, sendSema, recvSema,
+                      timeLeft, analyzerTasks.get(id));
+
+              sendSema.acquire();
+            }
+          } catch (InterruptedException e) {
+            Log.e("Replay", "Error sending packet", e);
+          }
         }
-      } catch (InterruptedException e) {
-        Log.e("Replay", "Error sending packet", e);
       }
+    };
+
+    //each server gets its own thread; if normal tests, there's only one server, but tomography
+    //tests require multiple servers, running the same tests at the same time
+    for (int i = 0; i < servers.size(); i++) {
+      Thread test = new Thread(sendPckts);
+      test.start();
+      tests.add(test);
+    }
+
+    try {
+      for (Thread t : tests) { //wait for all packets to be send to all servers before continuing
+        if (Consts.TIMEOUT_ENABLED) {
+          t.join(timeout * 1000L);
+        } else {
+          t.join();
+        }
+      }
+    } catch (InterruptedException e) {
+      Log.e("Queue", "Can't join test threads", e);
     }
 
     Log.i("Queue", "waiting for all threads to die!" + System.nanoTime());
 
+    int timeLeft;
     if (Consts.TIMEOUT_ENABLED) { //make sure joining thread doesn't wait past timeout
-      currentTime = (double) (System.nanoTime() - timeOrigin) / 1000000000.0; //nano sec to sec
+      double currentTime = (double) (System.nanoTime() - timeOrigin) / 1000000000.0; //nano sec to sec
       timeLeft = timeout - (int) currentTime;
       if (timeLeft <= 0) {
         timeLeft = 1;
@@ -186,9 +223,10 @@ public class CombinedQueue {
    * @param sendSema Semaphore for sending packets
    * @param recvSema Semaphore for receiving packets
    * @param timeLeft number of seconds left until timeout sending packets
+   * @param analyzerTask the class that keeps track of the throughput data
    */
-  private void nextTCP(CTCPClient client, RequestSet rs, Boolean timing,
-                       Semaphore sendSema, Semaphore recvSema, int timeLeft) {
+  private void nextTCP(CTCPClient client, RequestSet rs, Boolean timing, Semaphore sendSema,
+                       Semaphore recvSema, int timeLeft, CombinedAnalyzerTask analyzerTask) {
     // package this TCPClient into a TCPClientThread, then put it into a thread
     CTCPClientThread clientThread = new CTCPClientThread(client, rs, this,
             sendSema, recvSema, 100, analyzerTask);
@@ -230,6 +268,7 @@ public class CombinedQueue {
   /**
    * Sends the next UDP packet.
    *
+   * @param id                the id of current test
    * @param rs                the next UDP packet
    * @param udpPortMapping    map of client ports to UDP connections for the replay
    * @param udpReplayInfoBean bean containing info about the replay - used to add a socket
@@ -241,7 +280,7 @@ public class CombinedQueue {
    *                          in the ServerInstance is blank
    * @throws InterruptedException for Thread.sleep() when waiting to send packet if timing is true
    */
-  private void nextUDP(RequestSet rs, HashMap<String, CUDPClient> udpPortMapping,
+  private void nextUDP(int id, RequestSet rs, HashMap<String, CUDPClient> udpPortMapping,
                        UDPReplayInfoBean udpReplayInfoBean,
                        HashMap<String, HashMap<String, ServerInstance>> udpServerMapping,
                        Boolean timing, String server) throws InterruptedException {
@@ -289,12 +328,12 @@ public class CombinedQueue {
 
     // update sentJitter
     long currentTime = System.nanoTime();
-    synchronized (jitterBean) {
-      jitterBean.sentJitter.add(String
-              .valueOf((double) (currentTime - jitterTimeOrigin) / 1000000000));
-      jitterBean.sentPayload.add(rs.getPayload());
+    synchronized (jitterBeans.get(id)) {
+      jitterBeans.get(id).sentJitter.add(String
+              .valueOf((double) (currentTime - jitterTimeOrigins.get(id)) / 1000000000));
+      jitterBeans.get(id).sentPayload.add(rs.getPayload());
     }
-    jitterTimeOrigin = currentTime;
+    jitterTimeOrigins.set(id, currentTime);
 
     // adrian: send packet
     try {

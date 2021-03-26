@@ -29,6 +29,7 @@ public class Main {
     Log.ui("Configs", "\n\tReplay name: " + Config.appName
             + "\n\tServer name: " + Config.serverDisplay
             + "\n\tM-Lab Server API: " + Config.mLabServers
+            + "\n\tNumber servers: " + Config.numServers
             + "\n\tConfirmation replays: " + Config.confirmationReplays
             + "\n\tArea threshold: " + Config.a_threshold
             + "\n\tKS2P-value threshold: " + Config.ks2pvalue_threshold
@@ -60,8 +61,9 @@ public class Main {
    * @return true if option is valid; false otherwise
    */
   private static boolean isValidArg(String arg) {
-    return arg.equals("-n") || arg.equals("-s") || arg.equals("-m") || arg.equals("-c") || arg.equals("-a")
-            || arg.equals("-k") || arg.equals("-t") || arg.equals("-r") || arg.equals("-l");
+    return arg.equals("-n") || arg.equals("-s") || arg.equals("-m") || arg.equals("-u")
+            || arg.equals("-c") || arg.equals("-a") || arg.equals("-k") || arg.equals("-t")
+            || arg.equals("-r") || arg.equals("-l");
   }
 
   /**
@@ -126,6 +128,18 @@ public class Main {
         case "-m": //url of mlab server api
           Config.mLabServers = arg;
           break;
+        case "-u": //number of mlab servers to use (must be between 1 and 4 inclusive)
+          try {
+            int numServers = Integer.parseInt(arg);
+            if (numServers >= 1 && numServers <= 4) {
+              Config.numServers = numServers;
+            } else {
+              printError("Number of servers must be between 1 and 4 inclusive.");
+            }
+          } catch (NumberFormatException e) {
+            printError("Number of servers must be between 1 and 4 inclusive.");
+          }
+          break;
         case "-c": //turn off confirmation replay
           Config.confirmationReplays = false;
           break;
@@ -134,7 +148,7 @@ public class Main {
           try {
             Config.a_threshold = Integer.parseInt(arg);
             if (Config.a_threshold < 0 || Config.a_threshold > 100) {
-              System.out.println("Area threshold must be an integer between 0 and 100.");
+              printError("Area threshold must be an integer between 0 and 100.");
             }
           } catch (NumberFormatException e) {
             printError("\"" + arg + "\" is not an integer.");
