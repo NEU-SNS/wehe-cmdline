@@ -60,7 +60,13 @@ public class WebSocketConnection {
         }
       }
     });
-    Thread.sleep(5000);
+    //check every 500 ms to see if successfully connected to ws
+    for (int i = 0; i < 20; i++) {
+      if (success[0]) {
+        break;
+      }
+      Thread.sleep(500);
+    }
     if (!success[0]) {
       throw new DeploymentException("Couldn't connect to WebSocket");
     }

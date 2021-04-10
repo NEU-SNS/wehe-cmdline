@@ -106,6 +106,7 @@ public class Replay {
   //---------------------------------------------------
   private String appName; //app/port to run
   private final ArrayList<Timer> timers = new ArrayList<>();
+  private final ArrayList<Integer> numMLab = new ArrayList<>(); //number of tries before successful MLab connection
 
   public Replay() {
     this.appName = Config.appName;
@@ -332,6 +333,10 @@ public class Replay {
       Log.d("Serverhack", "hacking wehe4");
     } else {
       servers.add(getServerIP(server));
+      if (servers.get(servers.size() - 1).equals("")) {
+        Log.ui("ERR_UNK_HOST", S.ERROR_UNKNOWN_HOST);
+        return Consts.ERR_UNK_HOST;
+      }
     }
     // A hacky way to check server IP version
     boolean serverIPisV6 = false;
@@ -351,20 +356,27 @@ public class Replay {
       servers.clear();
       wsConns.clear();
       try {
+        int numTries = 0; //tracks num tries before successful MLab connection
         JSONObject mLabResp = sendRequest(Config.mLabServers, "GET", false, null, null);
         JSONArray mLabServers = (JSONArray) mLabResp.get("results"); //get MLab servers list
         WebSocketConnection wsConn = null;
         for (int i = 0; wsConns.size() < Config.numServers && i < mLabServers.length(); i++) {
           try {
+            numTries++;
+
             JSONObject serverObj = (JSONObject) mLabServers.get(i); //get MLab server
             server = "wehe-" + serverObj.getString("machine"); //SideChannel URL
             String mLabURL = ((JSONObject) serverObj.get("urls"))
                     .getString(Consts.MLAB_WEB_SOCKET_SERVER_KEY); //authentication URL
             wsConn = new WebSocketConnection(i, new URI(mLabURL)); //connect to WebSocket
-            wsConns.add(wsConn);
-            servers.add(getServerIP(server));
+
+            //code below runs only if successful connection to WebSocket
             Log.d("WebSocket", "New WebSocket connectivity check: "
                     + (wsConn.isOpen() ? "CONNECTED" : "CLOSED") + " TO " + server);
+            wsConns.add(wsConn);
+            servers.add(getServerIP(server));
+            numMLab.add(numTries);
+            numTries = 0;
           } catch (URISyntaxException | JSONException | DeploymentException | NullPointerException
                   | InterruptedException e) {
             if (wsConn != null && wsConn.isOpen()) {
@@ -536,11 +548,11 @@ public class Replay {
           publicIP = "127.0.0.1";
           break;
         } catch (IOException e) {
-          Log.w("getPublicIP", "Can't connect to server", e);
+          Log.w("getPublicIP", "Can't connect to server");
           try {
             Thread.sleep(1000);
           } catch (InterruptedException e1) {
-            Log.w("getPublicIP", "Slep interrupted", e1);
+            Log.w("getPublicIP", "Sleep interrupted", e1);
           }
           if (++numFails == 5) { //Cannot connect to server after 5 tries
             Log.w("getPublicIP", "Returning -1", e);
@@ -955,9 +967,12 @@ public class Replay {
         /*
          * Step 1: Tell server about the replay that is about to happen.
          */
-        // This is group of values that is used to track traces on server
-        // Youtube;False;0;DiffDetector;0;129.10.9.93;1.0
+        int i = 0;
         for (CombinedSideChannel sc : sideChannels) {
+          // This is group of values that is used to track traces on server
+          // Youtube;False;0;DiffDetector;0;129.10.9.93;1.0
+          //set extra string to number tries needed to access MLab server
+          Config.extraString = numMLab.size() == 0 ? "0" : numMLab.get(i).toString();
           sc.declareID(appData.getReplayName(), endOfTest ? "True" : "False",
                   randomID, String.valueOf(historyCount), String.valueOf(testId),
                   doTest ? Config.extraString + "-Test" : Config.extraString,
@@ -966,6 +981,7 @@ public class Replay {
           // This tuple tells the server if the server should operate on packets of traces
           // and if so which packets to process
           sc.sendChangeSpec(-1, "null", "null");
+          i++;
         }
 
         /*

@@ -123,7 +123,11 @@ public class Main {
           }
           break;
         case "-s": //url of server
-          Config.serverDisplay = arg;
+          Config.serverDisplay = arg.toLowerCase();
+          if (!Config.serverDisplay.matches("[a-z0-9.-]+")) {
+            printError("\"" + arg + "\" is not a valid server name. Can only contain alphanumerics, "
+                    + "period, and hyphen.");
+          }
           break;
         case "-m": //url of mlab server api
           Config.mLabServers = arg;
