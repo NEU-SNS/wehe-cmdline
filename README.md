@@ -5,7 +5,7 @@ This is the Wehe command line client. This app runs tests to help users determin
 ## About the Code
 
 * The code is based off of the Wehe [Android Client](https://github.com/NEU-SNS/wehe-android). 
-* Building the source code requires two additional libraries: [Tyrus Standalone Client v1.9](https://mvnrepository.com/artifact/org.glassfish.tyrus.bundles/tyrus-standalone-client/1.9) for WebSocket support and [JSON](https://github.com/stleary/JSON-java) ([Maven repo](https://mvnrepository.com/artifact/org.json/json/20201115)).
+* Building the source code requires two additional libraries: [Tyrus Standalone Client v1.17](https://mvnrepository.com/artifact/org.glassfish.tyrus.bundles/tyrus-standalone-client/1.17) for WebSocket support and [JSON](https://github.com/stleary/JSON-java) ([Maven repo](https://mvnrepository.com/artifact/org.json/json/20201115)).
 * The `src/` directory contains the source files.
 * The `res/` directory contains the app and port tests.
 * The code runs one test for each shell command.
