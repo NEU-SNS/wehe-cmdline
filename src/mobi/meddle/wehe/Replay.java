@@ -80,11 +80,11 @@ public class Replay {
   //---------------------------------------------------
   private CombinedAppJSONInfoBean appData;
   private ApplicationBean app;
-  private ArrayList<String> servers = new ArrayList<>(); //server to run the replays to
+  private final ArrayList<String> servers = new ArrayList<>(); //server to run the replays to
   private String metadataServer;
-  private ArrayList<WebSocketConnection> wsConns = new ArrayList<>();
+  private final ArrayList<WebSocketConnection> wsConns = new ArrayList<>();
   private boolean doTest; //add a tail for testing data if true
-  private ArrayList<String> analyzerServerUrls = new ArrayList<>();
+  private final ArrayList<String> analyzerServerUrls = new ArrayList<>();
   //true if confirmation replay should run if the first replay has differentiation
   private final boolean confirmationReplays;
   private final boolean useDefaultThresholds;
@@ -363,6 +363,7 @@ public class Replay {
         for (int i = 0; wsConns.size() < Config.numServers && i < mLabServers.length(); i++) {
           try {
             numTries++;
+            Log.d("WebSocket", "Attempting to connect to WebSocket " + i + ": " + server);
 
             JSONObject serverObj = (JSONObject) mLabServers.get(i); //get MLab server
             server = "wehe-" + serverObj.getString("machine"); //SideChannel URL
@@ -382,7 +383,7 @@ public class Replay {
             if (wsConn != null && wsConn.isOpen()) {
               wsConn.close();
             }
-            Log.e("WebSocket", "Can't connect to WebSocket: " + server, e);
+            Log.e("WebSocket", "Failed to connect to WebSocket: " + server, e);
           }
         }
       } catch (JSONException | NullPointerException e) {
@@ -638,7 +639,7 @@ public class Replay {
             String dataURL = URLEncoder(data);
             url_string += "?" + dataURL;
           }
-          Log.d("Send Request", url_string);
+          Log.d("Send GET Request", url_string);
 
           for (int i = 0; i < 3; i++) {
             try {
@@ -673,7 +674,7 @@ public class Replay {
             }
           }
         } else if (method.equalsIgnoreCase("POST")) {
-          Log.d("Send Request", url_string);
+          Log.d("Send POST Request", url_string);
 
           try {
             //connect to server
@@ -1076,18 +1077,20 @@ public class Replay {
             String destIP = csp.substring(csp.lastIndexOf('-') + 1,
                     csp.lastIndexOf("."));
             String destPort = csp.substring(csp.lastIndexOf('.') + 1);
+            //pad port to 5 digits with 0s; ex. 00443 or 00080
+            destPort = String.format("%5s", destPort).replace(' ', '0');
 
             //get the server
             ServerInstance instance;
             try {
               instance = Objects.requireNonNull(Objects.requireNonNull(
                       serverPortsMaps.get(sc.getId()).get("tcp")).get(destIP)).get(destPort);
-            } catch (NullPointerException e) {
+              assert instance != null;
+            } catch (NullPointerException | AssertionError e) {
               Log.e("Replay", "Cannot get instance", e);
               Log.ui("ERR_CONN_INST", S.ERROR_NO_CONNECTION);
               return Consts.ERR_CONN_INST;
             }
-            assert instance != null;
             if (instance.server.trim().equals(""))
               // Use a setter instead probably
               instance.server = servers.get(sc.getId()); // serverPortsMap.get(destPort);

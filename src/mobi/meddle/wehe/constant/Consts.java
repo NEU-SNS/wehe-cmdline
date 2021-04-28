@@ -14,7 +14,7 @@ public final class Consts {
   public static final int REPLAY_PORT_TIMEOUT = 30; //in seconds
 
   //from BuildConfig in android
-  public static final String VERSION_NAME = "3.1";
+  public static final String VERSION_NAME = "3.2";
 
   //exit codes
   public static final int SUCCESS = 0;

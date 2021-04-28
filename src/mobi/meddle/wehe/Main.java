@@ -12,8 +12,8 @@ public class Main {
 
   private static final String[] APP_IDS = {"applemusic", "dailymotion", "deezer", "disneyplus",
           "facebookvideo", "meet", "hulu", "teams", "nbcsports", "netflix", "molotovtv", "mycanal",
-          "ocs", "amazon", "salto", "sfrplay", "skype", "spotify", "twitch", "vimeo", "webex",
-          "whatsapp", "youtube", "zoom", "port80s", "port81s", "port465s", "port853s", "port993s",
+          "ocs", "amazon", "salto", "sfrplay", "skype", "spotify", "twitch", "twittervideo", "vimeo",
+          "webex", "whatsapp", "youtube", "zoom", "port80s", "port81s", "port465s", "port853s", "port993s",
           "port995s", "port1194s", "port1701s", "port5061s", "port6881s", "port8080s", "port8443s",
           "port80l", "port81l", "port465l", "port853l", "port993l", "port995l", "port1194l",
           "port1701l", "port5061l", "port6881l", "port8080l", "port8443l"}; //for -n argument

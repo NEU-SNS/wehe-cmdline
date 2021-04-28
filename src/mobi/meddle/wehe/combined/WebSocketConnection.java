@@ -47,7 +47,7 @@ public class WebSocketConnection {
     this.id = id;
     WebSocketContainer container = ContainerProvider.getWebSocketContainer(); //magic!
     executorService = Executors.newSingleThreadExecutor();
-    final boolean[] success = {false};
+    final Boolean[] success = {null};
     //hacky way to timeout websocket request for 2 seconds
     executorService.submit(new Runnable() {
       @Override
@@ -57,17 +57,18 @@ public class WebSocketConnection {
           success[0] = true;
         } catch (DeploymentException | IOException e) {
           Log.e("WebSocket", "WebSocket " + id + ": Failed connecting to WebSocket", e);
+          success[0] = false;
         }
       }
     });
     //check every 500 ms to see if successfully connected to ws
-    for (int i = 0; i < 20; i++) {
-      if (success[0]) {
+    for (int i = 0; i < 10; i++) {
+      if (success[0] != null) {
         break;
       }
       Thread.sleep(500);
     }
-    if (!success[0]) {
+    if (success[0] == null || !success[0]) {
       throw new DeploymentException("Couldn't connect to WebSocket");
     }
     Log.i("WebSocket", "WebSocket " + id + ": Connected to socket: " + serverURI.toString());

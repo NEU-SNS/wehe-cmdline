@@ -68,7 +68,7 @@ public final class S {
           + "  -s SERV_NAME hostname or IP of server to run the tests (Default: wehe4.meddle.mobi)\n"
           + "  -m MLAB_API  URL of the API to retrieve access envelopes to run tests on M-Lab servers\n"
           + "                 (Default: https://locate.measurementlab.net/v2/nearest/wehe/replay)\n"
-          + "  -u NUM_SRVR  number of servers to run test concurrently; only available with M-Lab\n"
+          + "  -u NUM_SRVR  number of servers to run test concurrently; available only with M-Lab\n"
           + "                 servers; must be between 1 and 4 inclusive (Default: 1)\n"
           + "  -c           turn off confirmation replays (if test is inconclusive, it will automatically\n"
           + "                 rerun by default)\n"
@@ -102,9 +102,10 @@ public final class S {
           + "Skype             skype              || 993 IMAPS large         port993l\n"
           + "Spotify           spotify            || 995 POP3S large         port995l\n"
           + "Twitch            twitch             || 1194 OpenVPN large      port1194l\n"
-          + "Vimeo             vimeo              || 1701 L2TP large         port1701l\n"
-          + "Webex             webex              || 5061 SIPS large         port5061l\n"
-          + "WhatsApp          whatsapp           || 6881 BitTorrent large   port6881l\n"
-          + "YouTube           youtube            || 8080 SpeedTest large    port8080l\n"
-          + "Zoom              zoom               || 8443 SpeedTest large    port8443l";
+          + "Twitter Video     twittervideo       || 1701 L2TP large         port1701l\n"
+          + "Vimeo             vimeo              || 5061 SIPS large         port5061l\n"
+          + "Webex             webex              || 6881 BitTorrent large   port6881l\n"
+          + "WhatsApp          whatsapp           || 8080 SpeedTest large    port8080l\n"
+          + "YouTube           youtube            || 8443 SpeedTest large    port8443l\n"
+          + "Zoom              zoom               || ";
 }
