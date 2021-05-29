@@ -126,7 +126,7 @@ public class Log {
       Scanner scanner = new Scanner(file);
       if (scanner.hasNextLine()) {
         randomID = scanner.nextLine();
-        if (randomID.length() == 10 && randomID.startsWith("!") && scanner.hasNextLine()) {
+        if (randomID.length() == 10 && randomID.startsWith("@") && scanner.hasNextLine()) {
           try {
             historyCount = Integer.parseInt(scanner.nextLine());
             if (historyCount >= 0) {
@@ -141,7 +141,7 @@ public class Log {
 
     //make new randomID and historyCount if necessary
     if (needNewInfo) {
-      randomID = "!" + new RandomString(9).nextString();
+      randomID = "@" + new RandomString(9).nextString();
       historyCount = 0;
       File file = new File(Config.INFO_FILE);
       if (file.getParentFile().mkdirs()) {
