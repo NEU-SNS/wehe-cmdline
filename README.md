@@ -6,7 +6,7 @@ more details.
 
 There are two ways to run the code:
 
-1) Run the jar file (wehe-cmdline.jar)
+1) Run the jar file (`wehe-cmdline.jar`)
 2) Build from source (use Java 11)
 
 ## About the Code
@@ -108,6 +108,10 @@ Output is contained in `RSLT_ROOT`:
   * Log files are in the format `ui_<randomID>_<historyCount>_<exitCode>.txt`.
 
 **Exit Codes**
+
+Each error exit code corresponds to a specific spot in the code where execution of the tests was
+terminated. CTRL+F the exit status on the code base to find where each of these locations are
+located.
 
 | Exit Code | Exit Status         | Explanation                                                   |
 |-----------|---------------------|---------------------------------------------------------------|
