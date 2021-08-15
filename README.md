@@ -4,6 +4,11 @@ This is the Wehe command line client. This app runs tests to help users determin
 are throttling network traffic for certain apps or ports. Please see https://wehe.meddle.mobi/ for
 more details.
 
+There are two ways to run the code:
+
+1) Run the jar file (wehe-cmdline.jar)
+2) Build from source (use Java 11)
+
 ## About the Code
 
 * The code is based off of the Wehe [Android Client](https://github.com/NEU-SNS/wehe-android). 
@@ -12,8 +17,8 @@ more details.
   for WebSocket support and [JSON](https://github.com/stleary/JSON-java)
   ([Maven repo](https://mvnrepository.com/artifact/org.json/json/20201115)).
 * The `src/` directory contains the source files.
-* The `res/` directory contains the app and port tests.
-* The code runs one test for each shell command.
+* The `res/` directory contains the app and port client traffic for the tests.
+* The code runs one test (one app/port replay and one "random" replay) for each shell command.
 
 ## Run the jar
 
@@ -21,7 +26,7 @@ A compiled jar comes with the repo (`wehe-cmdline.jar`). This jar was compiled u
 
 ### Usage
 
-Usage: `java -jar wehe-cmdline.jar -n [TEST_NAME] [OPTION]...`
+Usage: `java -jar wehe-cmdline.jar -n <TEST_NAME> [OPTION]...`
 
 Example: `java -jar wehe-cmdline.jar -n applemusic -c -r results/ -l info`
 
@@ -50,7 +55,8 @@ this if using the jar or if you don't move the `res/` directory. Default: `res/`
 
 `-l LOG_LEVEL` - The level of logs and above that should be printed to console (all levels will be 
 saved to logs on disk regardless of the level printed to console). Choose from `wtf`, `error`, 
-`warn`, `info`, or `debug`. Default: none of these, only `UI` logs will be printed to the console.
+`warn`, `info`, or `debug`. Default: none of these, only `UI` logs (what the user would see on screen
+when running the Android app) will be printed to the console.
 
 `-h` - Print the help message.
 
@@ -86,19 +92,20 @@ saved to logs on disk regardless of the level printed to console). Choose from `
 | YouTube         | `youtube`            | 8443 SpeedTest large  | `port8443l`          |
 | Zoom            | `zoom`               |                       |                      |
 
-Note: Small port tests are 10 MB, while large port tests are 50 MB.
+Note: Small port tests are 10 MB per replay, while large port tests are 50 MB per replay.
 
 ### Output
 
 Output is contained in `RSLT_ROOT`:
 
+* By default, the name of `RSLT_ROOT` is `res/` (change the directory name using the `-r` option).
 * `info.txt` - This file contains the user's random ID and the current history count.
 * `logs/` - This directory contains the logs that would be printed to the Android logs (think of 
   Android's Log class).
-  * Log files are the in the format `logs_[randomID]_[historyCount]_[exitCode].txt`
+  * Log files are the in the format `logs_<randomID>_<historyCount>_<exitCode>.txt`.
 * `ui/` - This directory contains the text that a user running the Android client would see on 
   his/her screen.
-  * Log files are in the format `ui_[randomID]_[historyCount]_[exitCode].txt`
+  * Log files are in the format `ui_<randomID>_<historyCount>_<exitCode>.txt`.
 
 **Exit Codes**
 
