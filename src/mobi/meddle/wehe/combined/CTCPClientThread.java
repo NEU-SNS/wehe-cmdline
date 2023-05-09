@@ -162,7 +162,7 @@ class CTCPClientThread implements Runnable {
             String data = new String(buffer, StandardCharsets.UTF_8);
 
             if (data.length() >= 12 && data.substring(0, 12).trim()
-                    .equalsIgnoreCase("WhoTheFAreU?")) {
+                    .equalsIgnoreCase("SuspiciousClientIP!")) {
               Log.e("TCPClientThread", "IP flipping detected");
               throw new SocketException("IP flipping detected");
             } else {
@@ -176,7 +176,7 @@ class CTCPClientThread implements Runnable {
 
         String data = new String(buffer, StandardCharsets.UTF_8);
         if (data.length() >= 12 && data.substring(0, 12).trim()
-                .equalsIgnoreCase("WhoTheFAreU?")) {
+                .equalsIgnoreCase("SuspiciousClientIP!")) {
           Log.e("TCPClientThread", data);
           throw new SocketException("Traffic Manipulation Detected (Type 1)");
         }
