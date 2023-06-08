@@ -20,6 +20,12 @@ There are two ways to run the code:
 * The `res/` directory contains the app and port client traffic for the tests.
 * The code runs one test (one app/port replay and one "random" replay) for each shell command.
 
+## Build jar with Maven
+
+This source code contains `pom.xml` file with the configuration and dependencies needed to build the jar file.
+
+To build the jar file, simply execute: `mvn package`.
+
 ## Run the jar
 
 A compiled jar comes with the repo (`wehe-cmdline.jar`). This jar was compiled using Java 11.
