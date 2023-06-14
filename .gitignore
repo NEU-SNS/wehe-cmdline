@@ -1,6 +1,22 @@
-.idea/
-out/
-target/
 test_results/
 src/META-INF/
-wehe-cmdline.iml
+
+# Intellij
+.idea/
+*.iml
+*.iws
+
+# Compiled Files
+*.class
+bin/
+out/
+build/
+/bin1/
+java/build/**
+
+# Maven
+log/
+target/
+
+# Mac
+.DS_Store
