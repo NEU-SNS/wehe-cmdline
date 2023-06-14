@@ -14,7 +14,7 @@ public final class Consts {
   public static final int REPLAY_PORT_TIMEOUT = 30; //in seconds
 
   //from BuildConfig in android
-  public static final String VERSION_NAME = "3.2.2";
+  public static final String VERSION_NAME = "4.0.0";
 
   //exit codes
   public static final int SUCCESS = 0;
@@ -44,4 +44,5 @@ public final class Consts {
   public static final int ERR_RSLT_NO_SUC = 24;
   public static final int ERR_RSLT_ID_HC = 25;
   public static final int ERR_BAD_JSON = 26;
+  public static final int ERR_NO_TOPO = 27;
 }

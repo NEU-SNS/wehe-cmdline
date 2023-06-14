@@ -7,7 +7,7 @@
     <groupId>mobi.meddle.wehe</groupId>
     <artifactId>wehe-cmdline</artifactId>
     <packaging>jar</packaging>
-    <version>1.0</version>
+    <version>4.0.0</version>
 
     <properties>
         <maven.compiler.source>13</maven.compiler.source>
@@ -29,6 +29,13 @@
             <groupId>org.json</groupId>
             <artifactId>json</artifactId>
             <version>20220320</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/com.google.guava/guava -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>32.0.1-jre</version>
         </dependency>
     </dependencies>
 

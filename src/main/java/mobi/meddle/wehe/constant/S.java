@@ -18,6 +18,7 @@ public final class S {
   public static final String ERROR_UNKNOWN = "Unknown server error";
   public static final String ERROR_ANALYSIS_FAIL = "Unable to analyze replay.";
   public static final String ERROR_RESULT = "Error getting results.";
+  public static final String ERROR_NO_TOPO = "Error finding a valid topology for this test.";
 
   public static final String CREATE_SIDE_CHANNEL = "Creating side channel";
   public static final String ASK4PERMISSION = "Asking for permission";
@@ -68,6 +69,10 @@ public final class S {
           + "  -s SERV_NAME hostname or IP of server to run the tests (Default: wehe4.meddle.mobi)\n"
           + "  -m MLAB_API  URL of the API to retrieve access envelopes to run tests on M-Lab servers\n"
           + "                 (Default: https://locate.measurementlab.net/v2/nearest/wehe/replay)\n"
+          + "  -y YTOPO_API URL of the API to retrieve y-shaped topologies collected from traceroutes;\n"
+          + "                 If no value provided, use MLAB_API to find servers\n"
+          + "                 If set to default, use URL: https://statistics.measurementlab.net/wehe/v0\n"
+          + "                 Else, use the provided URL\n"
           + "  -u NUM_SRVR  number of servers to run test concurrently; available only with M-Lab\n"
           + "                 servers; must be between 1 and 4 inclusive (Default: 1)\n"
           + "  -c           turn off confirmation replays (if test is inconclusive, it will automatically\n"

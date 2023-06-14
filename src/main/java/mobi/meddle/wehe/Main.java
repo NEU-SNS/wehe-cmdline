@@ -28,7 +28,8 @@ public class Main {
     parseArgs(args);
     Log.ui("Configs", "\n\tReplay name: " + Config.appName
             + "\n\tServer name: " + Config.serverDisplay
-            + "\n\tM-Lab Server API: " + Config.mLabServers
+            + "\n\tM-Lab Server API: " + Config.mLabLocateServers
+            + "\n\tReplay Using Y-topology: " + Config.useYTopology
             + "\n\tNumber servers: " + Config.numServers
             + "\n\tConfirmation replays: " + Config.confirmationReplays
             + "\n\tArea threshold: " + Config.a_threshold
@@ -63,7 +64,7 @@ public class Main {
   private static boolean isValidArg(String arg) {
     return arg.equals("-n") || arg.equals("-s") || arg.equals("-m") || arg.equals("-u")
             || arg.equals("-c") || arg.equals("-a") || arg.equals("-k") || arg.equals("-t")
-            || arg.equals("-r") || arg.equals("-l");
+            || arg.equals("-r") || arg.equals("-l") || arg.equals("-y");
   }
 
   /**
@@ -130,7 +131,13 @@ public class Main {
           }
           break;
         case "-m": //url of mlab server api
-          Config.mLabServers = arg;
+          Config.mLabLocateServers = arg;
+          break;
+        case "-y": //url to download y-topologies
+          Config.useYTopology = true;
+          if (!arg.equalsIgnoreCase("default")) {
+            Config.mLabYTopologiesURL = arg;
+          }
           break;
         case "-u": //number of mlab servers to use (must be between 1 and 4 inclusive)
           try {
@@ -208,6 +215,11 @@ public class Main {
         default: //options should have already been checked for validity before switch
           printError("Something went horribly wrong parsing arguments.");
       }
+    }
+
+    // Check if the argument combination is valid
+    if (Config.useYTopology && Config.numServers != 2) {
+      printError("Need two servers to run test with Y-topology.");
     }
   }
 }
