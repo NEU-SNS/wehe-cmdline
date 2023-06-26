@@ -99,7 +99,7 @@ public class Main {
       if (!isValidArg(opt)) { //get option
         printError("The \"" + opt + "\" option is not a valid.");
       }
-      if (!opt.equals("-c")) {
+      if (!opt.equals("-c") && !opt.equals("-y")) {
         if (i == args.length - 1) { //option (except for -c) cannot be the last arg
           printError("The \"" + opt + "\" option requires an argument.");
         } else {
@@ -133,11 +133,8 @@ public class Main {
         case "-m": //url of mlab server api
           Config.mLabLocateServers = arg;
           break;
-        case "-y": //url to download y-topologies
+        case "-y":
           Config.useYTopology = true;
-          if (!arg.equalsIgnoreCase("default")) {
-            Config.mLabYTopologiesURL = arg;
-          }
           break;
         case "-u": //number of mlab servers to use (must be between 1 and 4 inclusive)
           try {

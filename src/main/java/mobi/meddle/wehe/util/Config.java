@@ -10,7 +10,6 @@ public class Config {
   public static String serverDisplay = "wehe4.meddle.mobi";
   public static String mLabLocateServers = "https://locate.measurementlab.net/v2/nearest/wehe/replay";
   public static Boolean useYTopology = false;
-  public static String mLabYTopologiesURL = "https://storage.googleapis.com/wehe/v0";
   public static int numServers = 1;
   public static boolean confirmationReplays = true;
   public static boolean useDefaultThresholds = true;

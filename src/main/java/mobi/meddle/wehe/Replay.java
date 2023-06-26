@@ -1,6 +1,5 @@
 package mobi.meddle.wehe;
 
-import com.google.common.net.InetAddresses;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -14,8 +13,15 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.math.BigInteger;
-import java.net.*;
+import java.net.HttpURLConnection;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,7 +34,6 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -37,8 +42,6 @@ import java.util.Objects;
 import java.util.Scanner;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.TimeZone;
-import java.util.Calendar;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -387,6 +390,8 @@ public class Replay {
       } catch (NoTopologyFoundException e) {
         Log.ui("ERR_NO_TOPO", S.ERROR_NO_TOPO);
         return Consts.ERR_NO_TOPO;
+      } catch (CertificateException e) {
+        return Consts.ERR_CERT;
       }
       if (wsConns.size() < Config.numServers) {
         Log.ui("ERR_CONN_WS", S.ERROR_NO_WS);
@@ -438,44 +443,52 @@ public class Replay {
   /**
    * Find MLab servers to connect to.
    * When running localization test with Y-shaped topology , the method perform two steps:
-   *    1- Download from mlab y-topologies database the server site info
+   *    1- Send Get (getServers) request to Wehe Analyzer server for server-pair site-info
    *    2- Use M-Lab locate service to retrieve the server keys
    * In other cases, the method returns the nearest Mlab server.
    *
    * @return JSONArray with the result of mlab locate service response
    */
-  private JSONArray getMLabServerList() throws NoTopologyFoundException {
-    // return nearest mlab server
+  private JSONArray getMLabServerList() throws NoTopologyFoundException, CertificateException {
+    JSONObject mLabResp = sendRequest(Config.mLabLocateServers, "GET", false, null, null);
+    JSONArray mLabNearestServers = mLabResp.getJSONArray("results");
+
     if (!Config.useYTopology) {
-      JSONObject mLabResp = sendRequest(Config.mLabLocateServers, "GET", false, null, null);
-      return mLabResp.getJSONArray("results");
+      return mLabNearestServers;
     }
 
-    // find topologies suitable for localization
-    Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-    String date = new SimpleDateFormat("yyyy-MM-dd").format(calendar.getTime());
-    String publicIPPrefix = getAnonymizedIP(getPublicIP());
-    String url = String.format("%s/%s/ytopologies-%s-000000000000.json", Config.mLabYTopologiesURL, date, publicIPPrefix);
+    //get URL for analysis and results
+    int port = Config.result_port; //get port to send tests through
 
-    // handle case client have no y-shaped topology
-    JSONArray ytopologies = null;
-    try {
-      JSONObject response_obj = sendRequest(url, "GET", false, null, null);
-      ytopologies = response_obj.getJSONArray("topos");
-    } catch (NullPointerException e) {
-      throw new NoTopologyFoundException();
-    }
+    for (int i = 0; i < mLabNearestServers.length(); i++) {
+      JSONObject serverObj = mLabNearestServers.getJSONObject(i); //get MLab server
+      String serverIP = getServerIP("wehe-" + serverObj.getString("machine"));
+      String analyzerServerUrl = "https://" + serverIP + ":" + port + "/Results";
+      Log.d("Result Channel For Y-topology search", "path: " + serverIP + " port: " + port);
 
-    // handle case a server is offline and the locate response is incomplete
-    for (int i = 0; i < ytopologies.length(); i++) {
-      JSONObject servers = ytopologies.getJSONObject(i).getJSONObject("servers");
-      String s1SiteInfo = servers.getJSONObject("s1").getString("server_site");
-      String s2SiteInfo = servers.getJSONObject("s2").getString("server_site");
+      if (!generateServerCertificate(true)) {
+        Log.ui("SHI", "certificate error");
+        throw new CertificateException();
+      }
 
-      String mlabLocateURL = String.format("%s?site=%s&site=%s", Config.mLabLocateServers, s1SiteInfo, s2SiteInfo);
-      JSONObject mLabResp = sendRequest(mlabLocateURL, "GET", false, null, null);
-      if (mLabResp.getJSONArray("results").length() >= 2) {
-        return mLabResp.getJSONArray("results");
+      ArrayList<String> data = new ArrayList<>();
+      data.add("command=" + "getServers");
+      JSONObject resp = sendRequest(analyzerServerUrl, "GET", true, data, null);
+
+
+      if (resp != null && resp.getBoolean("success")) {
+        JSONArray serverPairs = resp.getJSONObject("response").getJSONArray("server-pairs");
+        for (int j = 0; j < serverPairs.length(); j++) {
+          JSONArray pair = serverPairs.getJSONArray(j);
+          String mlabLocateURL = String.format("%s?site=%s&site=%s",
+                  Config.mLabLocateServers, pair.getString(0), pair.getString(1));
+
+          mLabResp = sendRequest(mlabLocateURL, "GET", false, null, null);
+          if (mLabResp.getJSONArray("results").length() >= 2) {
+            return mLabResp.getJSONArray("results");
+          }
+        }
+        break;
       }
     }
     throw new NoTopologyFoundException();
@@ -621,64 +634,6 @@ public class Replay {
       Log.w("getPublicIP", "Client IP is not available");
     }
     return publicIP;
-  }
-
-  /**
-   * // TODO: find a better way to do this
-   * This method is a hack around getPublicIP(string port) to get the user's public IP
-   * before creating the connection for replay
-   *
-   * @return user's public IP or -1 if cannot connect to the server
-   */
-  private String getPublicIP() {
-    JSONObject mLabResp = sendRequest(Config.mLabLocateServers, "GET", false, null, null);
-    JSONArray mLabServers = (JSONArray) mLabResp.get("results"); //get MLab servers list
-
-    String server = null, publicIp = "-1";
-    WebSocketConnection wsConn = null;
-    try {
-      JSONObject serverObj = (JSONObject) mLabServers.get(0); //get MLab server
-      server = "wehe-" + serverObj.getString("machine"); //SideChannel URL
-      String mLabURL = ((JSONObject) serverObj.get("urls"))
-              .getString(Consts.MLAB_WEB_SOCKET_SERVER_KEY); //authentication URL
-      wsConn = new WebSocketConnection(0, new URI(mLabURL)); //connect to WebSocket
-
-      servers.add(getServerIP(server));
-      publicIp = getPublicIP("80");
-      servers.clear();
-    } catch (URISyntaxException | JSONException | DeploymentException | NullPointerException
-             | InterruptedException e) {
-      Log.e("WebSocket", "Failed to connect to WebSocket: " + server, e);
-    } finally {
-      if (wsConn != null && wsConn.isOpen()) {
-        wsConn.close();
-      }
-    }
-    return publicIp;
-  }
-
-  /**
-   * truncate the IP address with /24 for IPV4 and /48 for IPV6
-   *
-   * @param ip string representation of the IP
-   * @return the truncated IP according to RFC 5952
-   */
-  private String getAnonymizedIP(String ip){
-    InetAddress address = InetAddresses.forString(ip);
-
-    if (address instanceof Inet4Address) {
-      InetAddress mask = InetAddresses.forString("255.255.255.0");
-      BigInteger iMaskedAddress = InetAddresses.toBigInteger(address).and(InetAddresses.toBigInteger(mask));
-      return InetAddresses.toAddrString(InetAddresses.fromIPv4BigInteger(iMaskedAddress));
-    }
-
-    if (address instanceof Inet6Address) {
-      InetAddress mask = InetAddresses.forString("ffff:ffff:ffff:0000:0000:0000:0000:0000");
-      BigInteger iMaskedAddress = InetAddresses.toBigInteger(address).and(InetAddresses.toBigInteger(mask));
-      return InetAddresses.toAddrString(InetAddresses.fromIPv6BigInteger(iMaskedAddress));
-    }
-
-    return "-1";
   }
 
   /**
