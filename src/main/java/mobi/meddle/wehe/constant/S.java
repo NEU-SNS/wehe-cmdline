@@ -35,8 +35,8 @@ public final class S {
 
   public static final String NO_DIFF = "No differentiation";
   public static final String HAS_DIFF = "Differentiation detected";
-  public static final String COMMON_DIFF = "Differentiation at edge ISP";
-  public static final String NO_COMMON_DIFF_EVIDENCE = "No evidence of common differentiation";
+  public static final String LOCALIZE_SUCC = "Access network is causing differentiation.";
+  public static final String LOCALIZE_NO_EVIDENCE = "Localizing differentiation did not find evidence";
   public static final String INCONCLUSIVE = "Results inconclusive, try running the test again";
 
   public static final String TEST_BLOCKED_APP_TEXT = "The test appears to have been blocked. This "

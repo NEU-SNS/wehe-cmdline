@@ -1376,7 +1376,6 @@ public class Replay {
    * @return 0 if successful; otherwise error code
    */
   private int getResults(boolean portBlocked) {
-    ArrayList<Boolean> diffResults = new ArrayList<>(); // store diff decision of each server
     try {
       ArrayList<JSONObject> results = new ArrayList<>();
       if (!portBlocked) { //skip Step 1 and step 2 if port blocked
@@ -1483,6 +1482,7 @@ public class Replay {
        * Step 3: Parse the analysis results.
        */
       int i = 0;
+      ArrayList<Boolean> diffResults = new ArrayList<>(); // store diff decision of each server
       for (JSONObject result : results) {
         JSONObject response = portBlocked ? new JSONObject() : result.getJSONObject("response");
 
@@ -1556,6 +1556,7 @@ public class Replay {
         // TODO uncomment following code when you want differentiation to occur
         //differentiation = true;
         //inconclusive = true;
+        diffResults.add(differentiation);
 
         /*
          * Step 5: Save and display results to user. Rerun test if necessary.
@@ -1616,17 +1617,16 @@ public class Replay {
 
         Log.ui("FinalResults", response.toString()); //save user results to UI log file
       }
+
+      // check+run localization test
+      if (this.runLocalizationTest) {
+        return runLocalizationTest(diffResults);
+      }
     } catch (JSONException e) {
       Log.e("Result Channel", "parsing json error", e);
       Log.ui("ERR_BAD_JSON", S.ERROR_JSON);
       return Consts.ERR_BAD_JSON;
     }
-
-    // check+run localization test
-    if (this.runLocalizationTest) {
-      return runLocalizationTest(diffResults);
-    }
-
     return Consts.SUCCESS;
   }
 
@@ -1701,8 +1701,9 @@ public class Replay {
       return getLocalizeResults();
     }
 
+    String differentiationNetwork = "";
     String saveStatus = "no evidence of common differentiation";
-    Log.ui("LOCALIZE RESULT", S.NO_COMMON_DIFF_EVIDENCE);
+    Log.ui("LOCALIZE RESULT", S.LOCALIZE_NO_EVIDENCE);
 
     JSONObject result = new JSONObject();
     result.put("userID", randomID);
@@ -1716,6 +1717,7 @@ public class Replay {
     result.put("isIPv6", isIPv6);
     result.put("servers", servers.toString());
     result.put("carrier", "myCarrier");
+    result.put("LocalizationNetwork", differentiationNetwork);
     Log.d("localizeResult", result.toString());
 
     return Consts.SUCCESS;
@@ -1859,7 +1861,7 @@ public class Replay {
       boolean inconclusive = true;
 
       // 1- KS test results for pair replay xput sum v.s. single replay xput
-      boolean isSharedQueue = false;
+      boolean isXputHalved = false;
       if (response.has(Consts.LOC_XPUT_PAIR_VS_SINGLE_REPLAY)) {
         JSONObject ksResults = response.getJSONObject(Consts.LOC_XPUT_PAIR_VS_SINGLE_REPLAY);
         double area_test = ksResults.getDouble("area_test");
@@ -1870,7 +1872,7 @@ public class Replay {
 
         inconclusive = false;
         // TODO: design a statistical test to check if two sample come from same distribution
-        // isSharedQueue = ...
+        // isXputHalved = ...
         // ksResults.put("statistic_param_name", "statistic_param_value");
       } else {
         Log.d("Result Channel", "LOCALIZE RESULTS have no KS test results.");
@@ -1881,8 +1883,6 @@ public class Replay {
       if (response.has(Consts.LOC_LOSS_CORR)) {
           JSONObject corrResults = response.getJSONObject(Consts.LOC_LOSS_CORR);
           JSONArray corrPValues = corrResults.getJSONArray("corr_pvalues");
-          double lossReplay1 = corrResults.getDouble("pair_replay1_avg_loss");
-          double lossReplay2 = corrResults.getDouble("pair_replay2_avg_loss");
 
           double corr_pVal_threshold = (double) corrPValue_threshold / 100;
           double corr_ratio_threshold = (double) corrRatio_threshold / 100;
@@ -1905,7 +1905,7 @@ public class Replay {
         Log.d("Result Channel", "PAIR REPLAY did not experience significant loss.");
       }
 
-      if (isSharedQueue || isLossCorrelated) {
+      if (isXputHalved || isLossCorrelated) {
         commonDiff = true;
       }
 
@@ -1913,15 +1913,17 @@ public class Replay {
        * Step 5: Save and display results to user.
        */
       String saveStatus; //save to disk, so it can appear in the correct language in prev results
+      String differentiationNetwork = "";
       if (inconclusive) {
         saveStatus = "inconclusive";
         Log.ui("LOCALIZE RESULT", S.INCONCLUSIVE);
       } else if (commonDiff) {
-        saveStatus = "differentiation at edge ISP";
-        Log.ui("LOCALIZE RESULT", S.HAS_DIFF);
+        differentiationNetwork = "myCarrier";
+        saveStatus = "The network causing differentiation is your access network.";
+        Log.ui("LOCALIZE RESULT", S.LOCALIZE_SUCC);
       } else {
         saveStatus = "no evidence of common differentiation";
-        Log.ui("LOCALIZE RESULT", S.NO_COMMON_DIFF_EVIDENCE);
+        Log.ui("LOCALIZE RESULT", S.LOCALIZE_NO_EVIDENCE);
       }
 
       Log.i("Result Channel", "writing localization result to json array");
@@ -1933,6 +1935,7 @@ public class Replay {
       response.put("isIPv6", isIPv6);
       response.put("servers", servers.toString());
       response.put("carrier", "myCarrier");
+      response.put("LocalizationNetwork", differentiationNetwork);
       Log.d("response", response.toString());
 
       Log.ui("FinalLocalizationResults", response.toString()); //save user results to UI log file
