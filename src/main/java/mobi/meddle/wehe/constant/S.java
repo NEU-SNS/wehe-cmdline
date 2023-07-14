@@ -19,6 +19,7 @@ public final class S {
   public static final String ERROR_ANALYSIS_FAIL = "Unable to analyze replay.";
   public static final String ERROR_RESULT = "Error getting results.";
   public static final String ERROR_NO_TOPO = "Error finding a valid topology for this test.";
+  public static final String ERROR_LOC_TEST = "Unable to run localization test.";
 
   public static final String CREATE_SIDE_CHANNEL = "Creating side channel";
   public static final String ASK4PERMISSION = "Asking for permission";
@@ -34,6 +35,8 @@ public final class S {
 
   public static final String NO_DIFF = "No differentiation";
   public static final String HAS_DIFF = "Differentiation detected";
+  public static final String COMMON_DIFF = "Differentiation at edge ISP";
+  public static final String NO_COMMON_DIFF_EVIDENCE = "No evidence of common differentiation";
   public static final String INCONCLUSIVE = "Results inconclusive, try running the test again";
 
   public static final String TEST_BLOCKED_APP_TEXT = "The test appears to have been blocked. This "
