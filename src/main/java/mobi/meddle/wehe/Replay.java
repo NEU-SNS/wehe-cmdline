@@ -90,7 +90,7 @@ public class Replay {
   private final boolean useDefaultThresholds;
   private int a_threshold;
   private final int ks2pvalue_threshold;
-  private final boolean runLocalizationTest;
+  private boolean isLocalization;
   private final int corrPValue_threshold;
   private final int corrRatio_threshold;
   private SSLSocketFactory sslSocketFactory = null;
@@ -110,6 +110,8 @@ public class Replay {
   private String appName; //app/port to run
   private final ArrayList<Timer> timers = new ArrayList<>();
   private final ArrayList<Integer> numMLab = new ArrayList<>(); //number of tries before successful MLab connection
+  // store information about the single replay which are used later by the localization test
+  private final HashMap<String, String> singleReplayInfo = new HashMap<>();
 
   public Replay() {
     this.appName = Config.appName;
@@ -121,7 +123,6 @@ public class Replay {
     this.ks2pvalue_threshold = Config.ks2pvalue_threshold;
 
     // added for the localization tests
-    this.runLocalizationTest = Config.numServers >= 2 && Config.runLocalizationTest;
     this.corrPValue_threshold = Config.corrPValue_threshold;
     this.corrRatio_threshold = Config.corrRatio_threshold;
   }
@@ -133,6 +134,13 @@ public class Replay {
    * @return exit status
    */
   public int beginTest() {
+    /*
+     * Pre-check: clear all connection
+     */
+    servers.clear();
+    wsConns.clear();
+    analyzerServerUrls.clear();
+
     /*
      * Step 1: Initialize several variables.
      */
@@ -337,7 +345,9 @@ public class Replay {
 
     //extreme hack to temporarily get around French DNS look up issue (currently 100% MLab)
     if (server.equals("wehe4.meddle.mobi")) {
-      servers.add("10.0.0.0");
+      servers.add("34.28.122.46");
+      if (isLocalization) {servers.add("34.30.195.122");}
+//      servers.add("10.0.0.0");
       Log.d("Serverhack", "hacking wehe4");
     } else {
       servers.add(getServerIP(server));
@@ -461,7 +471,8 @@ public class Replay {
     JSONObject mLabResp = sendRequest(Config.mLabLocateServers, "GET", false, null, null);
     JSONArray mLabNearestServers = mLabResp.getJSONArray("results");
 
-    if (!Config.useYTopology) {
+    boolean useYTopology = false; //app.isLocalization();
+    if (!useYTopology) {
       return mLabNearestServers;
     }
 
@@ -1554,7 +1565,7 @@ public class Replay {
         }
 
         // TODO uncomment following code when you want differentiation to occur
-        //differentiation = true;
+        differentiation = true;
         //inconclusive = true;
         diffResults.add(differentiation);
 
@@ -1594,7 +1605,6 @@ public class Replay {
           saveStatus = "no diff";
           Log.ui("RESULT", S.NO_DIFF);
         }
-        diffResults.add(differentiation);
 
         app.area_test = area_test;
         app.ks2pVal = ks2pVal;
@@ -1619,7 +1629,7 @@ public class Replay {
       }
 
       // check+run localization test
-      if (this.runLocalizationTest) {
+      if (this.isLocalization) {
         return runLocalizationTest(diffResults);
       }
     } catch (JSONException e) {
@@ -1631,6 +1641,23 @@ public class Replay {
   }
 
   /**
+   * A localization test should consist of two replay rounds:
+   *  1- single replay round (which is the default of Wehe)
+   *  2- a simultaneous replay round with more than one server
+   * Information from the first round are stored and by the localization after the second round
+   */
+  public void saveSingleReplayInfo () {
+    this.singleReplayInfo.put("singleReplay_userID", randomID);
+    this.singleReplayInfo.put("singleReplay_historyCount", String.valueOf(historyCount));
+    this.singleReplayInfo.put("singleReplay_server", servers.get(0));
+  }
+
+  public void setLocalization(boolean isLocalization) {
+    this.isLocalization = isLocalization;
+    Config.numServers = 2;
+  }
+
+  /**
    * Asks the server to run localization test for the simultaneous replay.
    *
    * @param url             the url to the server where analysis will take place
@@ -1639,7 +1666,7 @@ public class Replay {
    * @param secondServerIP  the IP of the other server participating in replay; needed to collect measurements
    * @return a JSONObject: { "success" : true | false }; true if server localize successfully
    */
-  private JSONObject ask4Localization(String url, String id, int historyCount, String secondServerIP) {
+  private JSONObject ask4Localization(String url, String id, int historyCount, String secondServerIP, JSONObject kwargs) {
     HashMap<String, String> pairs = new HashMap<>();
 
     pairs.put("command", "localize");
@@ -1647,6 +1674,7 @@ public class Replay {
     pairs.put("historyCount", String.valueOf(historyCount));
     pairs.put("testID", "0"); // localization tests run on the original replay
     pairs.put("secondServerIP", secondServerIP);
+    pairs.put("kwargs", kwargs.toString());
 
     return sendRequest(url, "POST", true, null, pairs);
   }
@@ -1685,6 +1713,8 @@ public class Replay {
    */
   private int runLocalizationTest(ArrayList<Boolean> diffResults) {
     // sanity check
+    Log.ui("SHII", diffResults.toString());
+    Log.ui("SHII", analyzerServerUrls.toString());
     if (diffResults.size() != analyzerServerUrls.size()) {
       Log.e("Result Channel", "error checking if all servers report differentiation");
       Log.ui("ERR_LOC_TEST", S.ERROR_LOC_TEST);
@@ -1749,7 +1779,8 @@ public class Replay {
        */
       JSONObject resp, result = null;
       for (int ask4localizationRetry = 3; ask4localizationRetry > 0; ask4localizationRetry--) {
-        resp = ask4Localization(analyzerServerURL, randomID, app.getHistoryCount(), serverS2IP); //request localization
+        JSONObject kwargs = new JSONObject(singleReplayInfo);
+        resp = ask4Localization(analyzerServerURL, randomID, app.getHistoryCount(), serverS2IP, kwargs); //request localization
         if (resp == null) {
           Log.e("Result Channel", analyzerServerURL + ": ask4Localization returned null!");
         } else {

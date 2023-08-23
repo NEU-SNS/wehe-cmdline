@@ -72,7 +72,7 @@ public final class S {
           + "  -s SERV_NAME hostname or IP of server to run the tests (Default: wehe4.meddle.mobi)\n"
           + "  -m MLAB_API  URL of the API to retrieve access envelopes to run tests on M-Lab servers\n"
           + "                 (Default: https://locate.measurementlab.net/v2/nearest/wehe/replay)\n"
-          + "  -y           Use y-shaped topologies collected from traceroutes to perform this test\n"
+          + "  -y           Run a localization test\n"
           + "  -u NUM_SRVR  number of servers to run test concurrently; available only with M-Lab\n"
           + "                 servers; must be between 1 and 4 inclusive (Default: 1)\n"
           + "  -c           turn off confirmation replays (if test is inconclusive, it will automatically\n"

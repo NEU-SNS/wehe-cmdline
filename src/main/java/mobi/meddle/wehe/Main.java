@@ -29,7 +29,7 @@ public class Main {
     Log.ui("Configs", "\n\tReplay name: " + Config.appName
             + "\n\tServer name: " + Config.serverDisplay
             + "\n\tM-Lab Server API: " + Config.mLabLocateServers
-            + "\n\tReplay Using Y-topology: " + Config.useYTopology
+            + "\n\tRunning localization test: " + Config.isLocalization
             + "\n\tNumber servers: " + Config.numServers
             + "\n\tConfirmation replays: " + Config.confirmationReplays
             + "\n\tArea threshold: " + Config.a_threshold
@@ -41,6 +41,14 @@ public class Main {
 
     Replay replay = new Replay();
     int exitCode = replay.beginTest();
+
+    // in case of localization test, after the requested replay run a simultaneous replay
+    if (Config.isLocalization) {
+      replay.setLocalization(true);
+      replay.saveSingleReplayInfo();
+      exitCode = replay.beginTest();
+    }
+
     exitCode = Log.writeLogs(exitCode);
     System.exit(exitCode);
   }
@@ -134,7 +142,7 @@ public class Main {
           Config.mLabLocateServers = arg;
           break;
         case "-y":
-          Config.useYTopology = true;
+          Config.isLocalization = true;
           break;
         case "-u": //number of mlab servers to use (must be between 1 and 4 inclusive)
           try {
@@ -212,11 +220,6 @@ public class Main {
         default: //options should have already been checked for validity before switch
           printError("Something went horribly wrong parsing arguments.");
       }
-    }
-
-    // Check if the argument combination is valid
-    if (Config.useYTopology && Config.numServers != 2) {
-      printError("Need two servers to run test with Y-topology.");
     }
   }
 }
