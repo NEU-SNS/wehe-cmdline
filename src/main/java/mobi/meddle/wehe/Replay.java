@@ -4,24 +4,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
-import java.net.Inet4Address;
-import java.net.Inet6Address;
-import java.net.InetAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.net.UnknownHostException;
+import java.io.*;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,6 +26,9 @@ import java.util.Objects;
 import java.util.Scanner;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -346,7 +333,7 @@ public class Replay {
     //extreme hack to temporarily get around French DNS look up issue (currently 100% MLab)
     if (server.equals("wehe4.meddle.mobi")) {
       servers.add("34.28.122.46");
-      if (isLocalization) {servers.add("34.30.195.122");}
+//      if (isLocalization) {servers.add("34.30.195.122");}
 //      servers.add("10.0.0.0");
       Log.d("Serverhack", "hacking wehe4");
     } else {
@@ -990,8 +977,17 @@ public class Replay {
        * Step 0: Initialize variables.
        */
       // Based on the type selected load open or random trace of given application
+      Thread backThread = null;
       if (channel.equalsIgnoreCase("open")) {
         this.appData = unpickleJSON(app.getDataFile());
+        startBackWeheServer();
+        backThread = new Thread(new Runnable() {
+          @Override
+          public void run() {
+            runBackgroundTraffic();
+          }
+        });
+        backThread.start();
       } else if (channel.equalsIgnoreCase("random")) {
         this.appData = unpickleJSON(app.getRandomDataFile());
       } else {
@@ -1357,6 +1353,10 @@ public class Replay {
         Log.ui("ERR_CONN_IO_SERV", S.ERROR_NO_CONNECTION);
         return Consts.ERR_CONN_IO_SERV;
       }
+
+      if (backThread != null) {
+        backThread.interrupt();
+      }
     }
 
     /*
@@ -1565,7 +1565,7 @@ public class Replay {
         }
 
         // TODO uncomment following code when you want differentiation to occur
-        differentiation = true;
+//        differentiation = true;
         //inconclusive = true;
         diffResults.add(differentiation);
 
@@ -1713,8 +1713,6 @@ public class Replay {
    */
   private int runLocalizationTest(ArrayList<Boolean> diffResults) {
     // sanity check
-    Log.ui("SHII", diffResults.toString());
-    Log.ui("SHII", analyzerServerUrls.toString());
     if (diffResults.size() != analyzerServerUrls.size()) {
       Log.e("Result Channel", "error checking if all servers report differentiation");
       Log.ui("ERR_LOC_TEST", S.ERROR_LOC_TEST);
@@ -1977,5 +1975,143 @@ public class Replay {
       return Consts.ERR_BAD_JSON;
     }
     return Consts.SUCCESS;
+  }
+
+
+  private final String backServerIP = "34.122.168.31";
+
+  private void startBackWeheServer() {
+    // inform back server to run a server for the currently running application
+    Pattern pattern = Pattern.compile("(.*?)/(.*?).pcap_client_all.json");
+    Matcher matcher = pattern.matcher(app.getDataFile());
+    if (!matcher.find()) {
+      Log.e("BackReplay", "failed to extract app name");
+      return;
+    }
+
+    try {
+      URL url = new URL("http://" + backServerIP + ":55555/WeheServer");
+      URLConnection conn = url.openConnection();
+      HttpURLConnection http = (HttpURLConnection) conn;
+      http.setRequestMethod("POST"); // PUT is another valid option
+      http.setDoOutput(true);
+
+      HashMap<String, String> pairs = new HashMap<>();
+      pairs.put("app", matcher.group(2));
+      conn.getOutputStream().write(paramsToPostData(pairs).getBytes());
+
+      Log.ui("BackReplay", "response code " + http.getResponseCode());
+      http.disconnect();
+    } catch (IOException e) {
+      Log.e("BackReplay", "Failed to start the back WeheServer.");
+    }
+  }
+  private void runBackgroundTraffic() {
+    // first find the sample staring time of traces
+    int min = 2, max = 6;
+    int version = min + (int) (Math.random() * (max - min + 1));
+    String timesFile = Config.RESOURCES_ROOT + "/times_v" + version + ".csv";
+
+    ArrayList<Long> startTimes = new ArrayList<>();
+    try (BufferedReader br = new BufferedReader(new FileReader(timesFile))) {
+      String line;
+      while ((line = br.readLine()) != null) {
+        if (Math.random() < 0.1) {
+          String[] values = line.split(",");
+          startTimes.add((long) (Float.parseFloat(values[0]) * 1e3));
+        }
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+
+    // the client for trace replay
+    Runnable traceReplay = new Runnable() {
+
+      @Override
+      public void run() {
+        Socket socket = null;
+        try {
+          //-------------- open socket --------------//
+          socket = new Socket();
+          socket.setTcpNoDelay(true);
+          socket.setReuseAddress(true);
+          socket.setKeepAlive(true);
+          socket.setSoTimeout(30000);
+          socket.connect(new InetSocketAddress(backServerIP, 443));
+
+          //-------------- read trace --------------//
+          CombinedAppJSONInfoBean appData = unpickleJSON(app.getDataFile());
+
+          for (RequestSet RS : appData.getQ()) {
+            // send payload directly
+            DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+            dataOutputStream.write(RS.getPayload());
+
+            //-------------- receive response --------------//
+            if (RS.getResponse_len() > 0) {
+              DataInputStream dataInStream = new DataInputStream(socket.getInputStream());
+
+              int totalRead = 0;
+              byte[] buffer = new byte[RS.getResponse_len()];
+              while (totalRead < buffer.length) {
+                // @@@ offset is wrong?
+                int bufSize = 4096;
+                int bytesRead = dataInStream.read(buffer, totalRead,
+                        Math.min(buffer.length - totalRead, bufSize));
+                if (bytesRead < 0) {
+                  break;
+                }
+                totalRead += bytesRead;
+              }
+            }
+          }
+        } catch (IOException e) {
+          Log.e("BackReplay", "thread running background Wehe trace error: " + e);
+        } finally {
+          //-------------- close socket --------------//
+          if (socket != null) {
+            try {
+              socket.close();
+            } catch (IOException e) {
+              Log.e("BackReplay", "thread running background Wehe trace error: " + e);
+            }
+          }
+        }
+      }
+    };
+
+    // start the threads of client replay
+    ScheduledThreadPoolExecutor threadPool = new ScheduledThreadPoolExecutor(startTimes.size());
+
+    ArrayList<ScheduledFuture<?>> replays = new ArrayList<>();
+    for (Long time : startTimes) {
+      replays.add(threadPool.schedule(traceReplay, time, TimeUnit.MILLISECONDS));
+    }
+
+    ArrayList<Thread> timeouts = new ArrayList<>(startTimes.size());
+    for (ScheduledFuture<?> replay : replays) {
+      Thread timeout = new Thread(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            replay.get(10, TimeUnit.SECONDS);
+          } catch (InterruptedException | TimeoutException | ExecutionException e) {
+            replay.cancel(true);
+          }
+        }
+      });
+      timeout.start();
+      timeouts.add(timeout);
+    }
+
+    for (Thread timeout: timeouts) {
+      try {
+        timeout.join(45 * 1000L);
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    threadPool.shutdown();
   }
 }
