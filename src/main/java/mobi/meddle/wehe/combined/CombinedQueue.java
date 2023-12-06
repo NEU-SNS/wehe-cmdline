@@ -197,8 +197,10 @@ public class CombinedQueue {
   }
 
   public void stopTimers() {
-    for (Timer t : timers) {
-      t.cancel();
+    synchronized (timers) {
+      for (Timer t : timers) {
+        t.cancel();
+      }
     }
   }
 
@@ -262,7 +264,9 @@ public class CombinedQueue {
     }, timeLeft * 1000L);
     ++threads;
     cThreadList.add(cThread);
-    timers.add(t);
+    synchronized (timers) {
+      timers.add(t);
+    }
   }
 
   /**
