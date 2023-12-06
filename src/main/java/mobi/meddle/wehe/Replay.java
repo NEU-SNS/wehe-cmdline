@@ -96,9 +96,12 @@ public class Replay {
   //randomID, historyCount, and testId identifies the user, test number, and replay number
   //server uses these to determine which results to send back to client
   private String randomID; //unique user ID for certain device
-  //historyCount is the test number; current number can be seen as number of apps run
-  //or number of times user hit the run button for ports
+  //historyCount is the test number; current number can be seen as number of apps replays (original+bit-inverted) done
+  //during simultaneous replays the historyCount is incremented by the number of servers
+  //the list historyCounts contain the historyCount values of tests running simultaneously with 1 or more servers
+  //note: we do not use the same historyCount during simultaneous replay to avoid duplicate result files when collected from the servers
   private int historyCount;
+  private final ArrayList<Integer> historyCounts = new ArrayList<>();
   //testId is replay number in a test
   //for apps - 0 is original replay, 1 is random replay
   //for ports - 0 non-443 port, 1 is port 443
@@ -138,7 +141,10 @@ public class Replay {
     }
     historyCount = Integer.parseInt(info[1]);
     // update historyCount
-    historyCount++;
+    historyCounts.clear();
+    for (int i = 0; i < Config.numServers; i++) {
+      historyCounts.add(++historyCount);
+    }
 
     randomID = info[0];
     // This random ID is used to map the test results to a specific instance of app
@@ -968,21 +974,21 @@ public class Replay {
         /*
          * Step 1: Tell server about the replay that is about to happen.
          */
-        int i = 0;
+        int serverIdx = 0;
         for (CombinedSideChannel sc : sideChannels) {
           // This is group of values that is used to track traces on server
           // Youtube;False;0;DiffDetector;0;129.10.9.93;1.0
           //set extra string to number tries needed to access MLab server
-          Config.extraString = numMLab.size() == 0 ? "0" : numMLab.get(i).toString();
+          Config.extraString = numMLab.size() == 0 ? "0" : numMLab.get(serverIdx).toString();
           sc.declareID(appData.getReplayName(), endOfTest ? "True" : "False",
-                  randomID, String.valueOf(historyCount), String.valueOf(testId),
+                  randomID, String.valueOf(historyCounts.get(serverIdx)), String.valueOf(testId),
                   doTest ? Config.extraString + "-Test" : Config.extraString,
                   ipThroughProxy, Consts.VERSION_NAME);
 
           // This tuple tells the server if the server should operate on packets of traces
           // and if so which packets to process
           sc.sendChangeSpec(-1, "null", "null");
-          i++;
+          serverIdx++;
         }
 
         /*
@@ -1306,9 +1312,10 @@ public class Replay {
          * Step 1: Ask server to analyze a test.
          */
         JSONObject resp;
+        int serverIdx = 0;
         for (String server : analyzerServerUrls) {
           for (int ask4analysisRetry = 3; ask4analysisRetry > 0; ask4analysisRetry--) {
-            resp = ask4analysis(server, randomID, app.getHistoryCount()); //request analysis
+            resp = ask4analysis(server, randomID, historyCounts.get(serverIdx)); //request analysis
             if (resp == null) {
               Log.e("Result Channel", server + ": ask4analysis returned null!");
             } else {
@@ -1316,6 +1323,7 @@ public class Replay {
               break;
             }
           }
+          serverIdx++;
         }
 
         if (results.size() != analyzerServerUrls.size()) {
@@ -1350,9 +1358,10 @@ public class Replay {
         results.clear();
         String resultStatus;
         int exitStatus;
+        serverIdx = 0;
         for (String url : analyzerServerUrls) {
           for (int i = 0; ; i++) { //3 attempts to get analysis from sever
-            resp = getSingleResult(url, randomID, app.getHistoryCount()); //get result
+            resp = getSingleResult(url, randomID, historyCounts.get(serverIdx)); //get result
 
             if (resp == null) {
               resultStatus = "ERR_RSLT_NULL";
@@ -1398,19 +1407,20 @@ public class Replay {
               }
             }
           }
+          serverIdx++;
         }
       }
 
       /*
        * Step 3: Parse the analysis results.
        */
-      int i = 0;
+      int resultIdx = 0;
       for (JSONObject result : results) {
         JSONObject response = portBlocked ? new JSONObject() : result.getJSONObject("response");
 
         if (portBlocked) { //generate result if port blocked
           response.put("userID", randomID);
-          response.put("historyCount", historyCount);
+          response.put("historyCount", historyCounts.get(resultIdx));
           response.put("replayName", app.getDataFile());
           response.put("area_test", -1);
           response.put("ks2pVal", -1);
@@ -1419,7 +1429,7 @@ public class Replay {
           response.put("xput_avg_test", app.randomThroughput); //calculated in runTest() Step 11
         }
 
-        Log.d("Result Channel", "SERVER RESPONSE " + i++ + ": " + response.toString());
+        Log.d("Result Channel", "SERVER RESPONSE " + resultIdx + ": " + response.toString());
 
         String userID = response.getString("userID");
         int historyCount = response.getInt("historyCount");
@@ -1431,7 +1441,7 @@ public class Replay {
 
         // sanity check
         if ((!userID.trim().equalsIgnoreCase(randomID))
-                || (historyCount != app.getHistoryCount())) {
+                || (historyCount != historyCounts.get(resultIdx))) {
           Log.e("Result Channel", "Result didn't pass sanity check! "
                   + "correct id: " + randomID
                   + " correct historyCount: " + app.getHistoryCount());
@@ -1536,6 +1546,7 @@ public class Replay {
         Log.d("response", response.toString());
 
         Log.ui("FinalResults", response.toString()); //save user results to UI log file
+        resultIdx++;
       }
     } catch (JSONException e) {
       Log.e("Result Channel", "parsing json error", e);
