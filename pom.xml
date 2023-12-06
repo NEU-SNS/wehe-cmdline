@@ -7,7 +7,7 @@
     <groupId>mobi.meddle.wehe</groupId>
     <artifactId>wehe-cmdline</artifactId>
     <packaging>jar</packaging>
-    <version>1.0</version>
+    <version>4.0.0</version>
 
     <properties>
         <maven.compiler.source>13</maven.compiler.source>

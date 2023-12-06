@@ -14,6 +14,7 @@ public class Config {
   public static boolean useDefaultThresholds = true;
   public static int a_threshold = Consts.A_THRESHOLD;
   public static int ks2pvalue_threshold = Consts.KS2PVAL_THRESHOLD;
+  public static boolean isLocalization = false;
   public static int logLev = 0;
 
   public static boolean timing;

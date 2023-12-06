@@ -29,6 +29,7 @@ public class Main {
     Log.ui("Configs", "\n\tReplay name: " + Config.appName
             + "\n\tServer name: " + Config.serverDisplay
             + "\n\tM-Lab Server API: " + Config.mLabServers
+            + "\n\tRunning localization test: " + Config.isLocalization
             + "\n\tNumber servers: " + Config.numServers
             + "\n\tConfirmation replays: " + Config.confirmationReplays
             + "\n\tArea threshold: " + Config.a_threshold
@@ -40,6 +41,13 @@ public class Main {
 
     Replay replay = new Replay();
     int exitCode = replay.beginTest();
+
+    // in case of localization test, after the requested replay, run a simultaneous replay
+    if (Config.isLocalization && exitCode == 0) {
+      replay.setLocalization(true);
+      exitCode = replay.beginTest();
+    }
+
     exitCode = Log.writeLogs(exitCode);
     System.exit(exitCode);
   }
@@ -63,7 +71,7 @@ public class Main {
   private static boolean isValidArg(String arg) {
     return arg.equals("-n") || arg.equals("-s") || arg.equals("-m") || arg.equals("-u")
             || arg.equals("-c") || arg.equals("-a") || arg.equals("-k") || arg.equals("-t")
-            || arg.equals("-r") || arg.equals("-l");
+            || arg.equals("-r") || arg.equals("-l") || arg.equals("-y");
   }
 
   /**
@@ -98,7 +106,7 @@ public class Main {
       if (!isValidArg(opt)) { //get option
         printError("The \"" + opt + "\" option is not a valid.");
       }
-      if (!opt.equals("-c")) {
+      if (!opt.equals("-c") && !opt.equals("-y")) {
         if (i == args.length - 1) { //option (except for -c) cannot be the last arg
           printError("The \"" + opt + "\" option requires an argument.");
         } else {
@@ -131,6 +139,9 @@ public class Main {
           break;
         case "-m": //url of mlab server api
           Config.mLabServers = arg;
+          break;
+        case "-y":
+          Config.isLocalization = true;
           break;
         case "-u": //number of mlab servers to use (must be between 1 and 4 inclusive)
           try {

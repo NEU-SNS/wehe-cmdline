@@ -167,6 +167,10 @@ public class Log {
     historyCount++;
   }
 
+  public static void setHistoryCount(int count) {
+    historyCount = count;
+  }
+
   /**
    * Call the functions to write the logs and UI text to disk.
    *

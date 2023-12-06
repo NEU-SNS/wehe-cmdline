@@ -90,6 +90,7 @@ public class Replay {
   private final boolean useDefaultThresholds;
   private int a_threshold;
   private final int ks2pvalue_threshold;
+  private boolean isLocalization;
   private SSLSocketFactory sslSocketFactory = null;
   private HostnameVerifier hostnameVerifier = null;
   private boolean rerun = false; //true if confirmation replay
@@ -129,6 +130,14 @@ public class Replay {
    */
   public int beginTest() {
     /*
+     * Pre-check: clear all connection
+     */
+    servers.clear();
+    wsConns.clear();
+    analyzerServerUrls.clear();
+    historyCounts.clear();
+
+    /*
      * Step 1: Initialize several variables.
      */
     String[] info;
@@ -141,7 +150,6 @@ public class Replay {
     }
     historyCount = Integer.parseInt(info[1]);
     // update historyCount
-    historyCounts.clear();
     for (int i = 0; i < Config.numServers; i++) {
       historyCounts.add(++historyCount);
     }
@@ -156,7 +164,7 @@ public class Replay {
     }
 
     //write randomID and updated historyCount to the info file
-    Log.incHistoryCount();
+    Log.setHistoryCount(historyCount);
     try {
       Log.writeInfo();
     } catch (IOException e) {
@@ -572,6 +580,11 @@ public class Replay {
       Log.w("getPublicIP", "Client IP is not available");
     }
     return publicIP;
+  }
+
+  public void setLocalization(boolean isLocalization) {
+    this.isLocalization = isLocalization;
+    Config.numServers = 2;
   }
 
   /**
@@ -1300,6 +1313,8 @@ public class Replay {
    * Step 1: Ask sever to analyze a test. Step 2: Get result of analysis from server. Step 3: Parse
    * the analysis results. Step 4: Determine if there is differentiation. Step 5: Save and display
    * results to user. Rerun test if necessary.
+   * <p>
+   * ADDED BY NAL TEAM: after running previous steps: run the localization test
    *
    * @param portBlocked true if a port in the port tests is blocked; false otherwise
    * @return 0 if successful; otherwise error code
