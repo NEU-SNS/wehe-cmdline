@@ -45,6 +45,7 @@ public class Main {
     // in case of localization test, after the requested replay, run a simultaneous replay
     if (Config.isLocalization && exitCode == 0) {
       replay.setLocalization(true);
+      replay.saveSingleReplayInfo();
       exitCode = replay.beginTest();
     }
 

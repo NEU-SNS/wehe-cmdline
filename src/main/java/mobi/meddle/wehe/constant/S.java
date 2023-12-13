@@ -18,6 +18,7 @@ public final class S {
   public static final String ERROR_UNKNOWN = "Unknown server error";
   public static final String ERROR_ANALYSIS_FAIL = "Unable to analyze replay.";
   public static final String ERROR_RESULT = "Error getting results.";
+  public static final String ERROR_LOC_TEST = "Unable to run localization test.";
 
   public static final String CREATE_SIDE_CHANNEL = "Creating side channel";
   public static final String ASK4PERMISSION = "Asking for permission";
@@ -33,6 +34,8 @@ public final class S {
 
   public static final String NO_DIFF = "No differentiation";
   public static final String HAS_DIFF = "Differentiation detected";
+  public static final String LOCALIZE_SUCC = "Access network is causing differentiation.";
+  public static final String LOCALIZE_NO_EVIDENCE = "Localizing differentiation did not find evidence";
   public static final String INCONCLUSIVE = "Results inconclusive, try running the test again";
 
   public static final String TEST_BLOCKED_APP_TEXT = "The test appears to have been blocked. This "

@@ -15,6 +15,9 @@ public class Config {
   public static int a_threshold = Consts.A_THRESHOLD;
   public static int ks2pvalue_threshold = Consts.KS2PVAL_THRESHOLD;
   public static boolean isLocalization = false;
+  public static int mwuPValue_threshold = Consts.MWU_PVAL_THRESHOLD;
+  public static int corrPValue_threshold = Consts.CORR_PVAL_THRESHOLD;
+  public static int corrRatio_threshold = Consts.CORR_RATIO_THRESHOLD;
   public static int logLev = 0;
 
   public static boolean timing;
