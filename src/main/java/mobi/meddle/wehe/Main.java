@@ -28,7 +28,7 @@ public class Main {
     parseArgs(args);
     Log.ui("Configs", "\n\tReplay name: " + Config.appName
             + "\n\tServer name: " + Config.serverDisplay
-            + "\n\tM-Lab Server API: " + Config.mLabServers
+            + "\n\tM-Lab Server API: " + Config.mLabLocateServer
             + "\n\tRunning localization test: " + Config.isLocalization
             + "\n\tNumber servers: " + Config.numServers
             + "\n\tConfirmation replays: " + Config.confirmationReplays
@@ -139,7 +139,7 @@ public class Main {
           }
           break;
         case "-m": //url of mlab server api
-          Config.mLabServers = arg;
+          Config.mLabLocateServer = arg;
           break;
         case "-y":
           Config.isLocalization = true;

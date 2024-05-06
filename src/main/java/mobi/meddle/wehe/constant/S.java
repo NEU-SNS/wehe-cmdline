@@ -19,6 +19,8 @@ public final class S {
   public static final String ERROR_ANALYSIS_FAIL = "Unable to analyze replay.";
   public static final String ERROR_RESULT = "Error getting results.";
   public static final String ERROR_LOC_TEST = "Unable to run localization test.";
+  public static final String ERROR_NO_LOCALIZATION_TOPO = "Could not find server-pair with valid topology " +
+          "to localize differentiation.";
 
   public static final String CREATE_SIDE_CHANNEL = "Creating side channel";
   public static final String ASK4PERMISSION = "Asking for permission";

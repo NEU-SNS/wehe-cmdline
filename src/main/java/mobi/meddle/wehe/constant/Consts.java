@@ -50,4 +50,5 @@ public final class Consts {
   public static final int ERR_RSLT_ID_HC = 25;
   public static final int ERR_BAD_JSON = 26;
   public static final int ERR_LOC_TEST = 27;
+  public static final int ERR_NO_LOCALIZATION_TOPO = 28;
 }

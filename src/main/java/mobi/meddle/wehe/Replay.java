@@ -90,7 +90,10 @@ public class Replay {
   private final boolean useDefaultThresholds;
   private int a_threshold;
   private final int ks2pvalue_threshold;
+  private boolean mlabServerUsed = false;
   private boolean isLocalization;
+  private JSONArray locServerPairs = null;
+  private String differentiationNetworks;
   private final int mwuPValue_threshold;
   private final int corrPValue_threshold;
   private final int corrRatio_threshold;
@@ -355,10 +358,15 @@ public class Replay {
       servers.add("10.0.0.0");
       Log.d("Serverhack", "hacking wehe4");
     } else {
-      servers.add(getServerIP(server));
-      if (servers.get(servers.size() - 1).equals("")) {
-        Log.ui("ERR_UNK_HOST", S.ERROR_UNKNOWN_HOST);
-        return Consts.ERR_UNK_HOST;
+      try {
+        servers.addAll(getServerIPList(server));
+        if (servers.get(servers.size() - 1).equals("")) {
+          Log.ui("ERR_UNK_HOST", S.ERROR_UNKNOWN_HOST);
+          return Consts.ERR_UNK_HOST;
+        }
+      } catch (NoTopologyFoundException e) {
+        Log.ui("ERR_NO_LOCALIZATION_TOPO", S.ERROR_NO_LOCALIZATION_TOPO);
+        return Consts.ERR_NO_LOCALIZATION_TOPO;
       }
     }
     // A hacky way to check server IP version
@@ -375,13 +383,14 @@ public class Replay {
     //server doesn't disconnect (for security). URL valid for connection for 2 min after GET
     //request made. 4) Connect to SideChannel with MLab machine URL. 5) Authentication URL
     //has another 2 min timeout after connecting; every MLab test needs to do this process.
+    mlabServerUsed = false;
     if (servers.get(0).equals("10.0.0.0") || serverIPisV6) {
+      mlabServerUsed = true;
       servers.clear();
       wsConns.clear();
       try {
         int numTries = 0; //tracks num tries before successful MLab connection
-        JSONObject mLabResp = sendRequest(Config.mLabServers, "GET", false, null, null);
-        JSONArray mLabServers = (JSONArray) mLabResp.get("results"); //get MLab servers list
+        JSONArray mLabServers = getMLabServerList();
         WebSocketConnection wsConn = null;
         for (int i = 0; wsConns.size() < Config.numServers && i < mLabServers.length(); i++) {
           try {
@@ -411,6 +420,9 @@ public class Replay {
         }
       } catch (JSONException | NullPointerException e) {
         Log.e("WebSocket", "Can't retrieve M-Lab servers", e);
+      } catch (NoTopologyFoundException e) {
+        Log.ui("ERR_NO_LOCALIZATION_TOPO", S.ERROR_NO_LOCALIZATION_TOPO);
+        return Consts.ERR_NO_LOCALIZATION_TOPO;
       }
       if (wsConns.size() < Config.numServers) {
         Log.ui("ERR_CONN_WS", S.ERROR_NO_WS);
@@ -447,6 +459,106 @@ public class Replay {
       }
     }
     return Consts.SUCCESS;
+  }
+
+  /**
+   * This expection is specific to whether a Y-topology exist for the given client
+   * If no topology found, localization test is not possible
+   */
+  static class NoTopologyFoundException extends Exception {
+    public NoTopologyFoundException() {
+      super("No topology found.");
+    }
+  }
+
+  /**
+   * Retrieves the server pair topologies from Wehe analyzer server.
+   *
+   * @param url           the url of the server to get the result
+   * @return a JSONObject with a key named "success". If value of "success" is false, a key named
+   * "error" is also contained in the result. If the value of "success" is true, a key named
+   * "response" is the result.
+   */
+  private JSONArray getTopologies(String url) {
+    ArrayList<String> requestInfo = new ArrayList<>();
+    requestInfo.add("command=" + "getServers");
+    for (int i = 0; i < 3; i++) {
+      JSONObject resp = sendRequest(url, "GET", true, requestInfo, null);
+      try {
+        if (resp != null && resp.getBoolean("success")) {
+          String key = mlabServerUsed ? "server-site-pairs" : "server-ip-pairs";
+          return resp.getJSONObject("response").getJSONArray(key);
+        }
+      } catch (JSONException e) {
+        Log.e("Send Request", "JSON Parse failed", e);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find MLab servers to connect to.
+   * When running localization test with Y-shaped topology, the method perform two steps:
+   *    1- Send Get (getServers) request to Wehe Analyzer server for server-pair site-info
+   *    2- Use M-Lab locate service to retrieve the server keys
+   * In other cases, the method returns the nearest Mlab server.
+   *
+   * @return JSONArray with the result of mlab locate service response
+   */
+  private JSONArray getMLabServerList() throws NoTopologyFoundException {
+    JSONObject mLabResp = sendRequest(Config.mLabLocateServer, "GET", false, null, null);
+    JSONArray mLabNearestServers = mLabResp.getJSONArray("results"); //get MLab servers list
+
+    // for single replay test, simply return the returned server
+    if (!this.isLocalization) {
+      return mLabNearestServers;
+    }
+
+    if (locServerPairs == null || locServerPairs.length() == 0) {
+      throw new NoTopologyFoundException();
+    }
+
+    for (int j = 0; j < locServerPairs.length(); j++) {
+      JSONArray pair = locServerPairs.getJSONArray(j);
+      String mlabLocateURL = String.format("%s?site=%s&site=%s",
+              Config.mLabLocateServer, pair.getString(0), pair.getString(1));
+      mLabResp = sendRequest(mlabLocateURL, "GET", false, null, null);
+      if (mLabResp.getJSONArray("results").length() >= 2) {
+        differentiationNetworks = pair.getString(2);
+        return mLabResp.getJSONArray("results");
+      }
+    }
+    throw new NoTopologyFoundException();
+  }
+
+  private ArrayList<String> getServerIPList(String server) throws NoTopologyFoundException {
+    ArrayList<String> serverIPs = new ArrayList<>();
+
+    // TODO: also handle case of passing multiple servers
+    serverIPs.add(getServerIP(server));
+
+    // for single replay test, simply return the server ip value
+    if (!this.isLocalization) {
+      return serverIPs;
+    }
+
+    if (locServerPairs == null || locServerPairs.length() == 0) {
+      throw new NoTopologyFoundException();
+    }
+
+    try {
+      if (locServerPairs.length() != 0) {
+        JSONArray pair = locServerPairs.getJSONArray(0);
+        ArrayList<String> serverPairIPs = new ArrayList<>();
+        serverPairIPs.add(pair.getString(0));
+        serverPairIPs.add(pair.getString(1));
+        differentiationNetworks = pair.getString(2);
+        return serverPairIPs;
+      }
+    } catch (JSONException e) {
+      Log.e("Send Request", "JSON Parse failed", e);
+    }
+    throw new NoTopologyFoundException();
   }
 
   /**
@@ -1542,6 +1654,12 @@ public class Replay {
             }
           }
           Log.ui("RESULT_MSG", error);
+
+          // when differentiation detected, look for Y-shaped topology
+          Log.d("Topologies Channel", "send getServers request to: " + analyzerServerUrls.get(0));
+          if (locServerPairs == null) {
+            locServerPairs = getTopologies(analyzerServerUrls.get(0));
+          }
         } else {
           saveStatus = "no diff";
           Log.ui("RESULT", S.NO_DIFF);
@@ -1904,7 +2022,7 @@ public class Replay {
         saveStatus = "inconclusive";
         Log.ui("LOCALIZE RESULT", S.INCONCLUSIVE);
       } else if (commonDiff) {
-        differentiationNetwork = "myCarrier";
+        differentiationNetwork = differentiationNetworks;
         saveStatus = "The network causing differentiation is your access network.";
         Log.ui("LOCALIZE RESULT", S.LOCALIZE_SUCC);
       } else {
