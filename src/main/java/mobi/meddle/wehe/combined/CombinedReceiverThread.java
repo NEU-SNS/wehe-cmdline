@@ -42,6 +42,8 @@ public final class CombinedReceiverThread implements Runnable {
     Thread.currentThread().setName("CombinedReceiverThread (Thread)");
     long jitterTimeOrigin = System.nanoTime();
 
+    System.out.println("heloooooooooooooooooooooo"
+    );
     try {
       Selector selector = Selector.open();
       int bufSize = 4096;
@@ -58,6 +60,9 @@ public final class CombinedReceiverThread implements Runnable {
         int TIME_OUT = 1000; //run every 1 second
         int sks = selector.select(TIME_OUT);
         if (sks == 0) {
+          System.out.println(
+                  "its zero"
+          );
           continue;
         }
 
@@ -73,6 +78,7 @@ public final class CombinedReceiverThread implements Runnable {
             buf.get(data);
 
             analyzerTask.bytesRead += data.length; //add to throughput data
+            System.out.println("aaa " + data.length);
 
             // for receive jitter
             long currentTime = System.nanoTime();
@@ -83,11 +89,15 @@ public final class CombinedReceiverThread implements Runnable {
               jitterBean.rcvdPayload.add(data);
             }
             jitterTimeOrigin = currentTime;
+          } else {
+            System.out.println("chan is null");
           }
           selectedKeys.remove();
         }
+        System.out.println("no more items");
         buf.clear();
       }
+      System.out.println("stopped running");
       selector.close();
     } catch (IOException e) {
       Log.w("Receiver", "receiving udp packet error!", e);

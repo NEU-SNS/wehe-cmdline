@@ -261,7 +261,7 @@ public class Replay {
 
       JSONObject appObj;
       ApplicationBean bean;
-      //load each app/port into ApplicationBeans
+      //load the app that user wants to test into ApplicationBean
       for (int i = 0; i < jArray.length(); i++) {
         appObj = jArray.getJSONObject(i);
 
