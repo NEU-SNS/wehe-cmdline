@@ -7,7 +7,7 @@ more details.
 There are two ways to run the code:
 
 1) Run the jar file (`wehe-cmdline.jar`)
-2) Build from source (use Java 11)
+2) Build from source (use Java 17)
 
 ## About the Code
 
@@ -28,7 +28,13 @@ To build the jar file, simply execute: `mvn package`.
 
 ## Run the jar
 
-A compiled jar comes with the repo (`wehe-cmdline.jar`). This jar was compiled using Java 11.
+A compiled jar comes with the repo (`wehe-cmdline.jar`). This jar was compiled using Java 17. To
+run this jar, it must be in the same directory as the `res/` directory.
+
+## Certificates
+
+If using this client with different certificates than the production certificates, replace
+`res/main` with the proper PEM certificate.
 
 ### Usage
 
@@ -70,33 +76,40 @@ when running the Android app) will be printed to the console.
 
 **Tests**
 
-| App Name        | Test Name (`-n` arg) | Port Name             | Test Name (`-n` arg) |
-|-----------------|----------------------|-----------------------|----------------------|
-| Apple Music     | `applemusic`         | 80 HTTP small         | `port80s`            |
-| Dailymotion     | `dailymotion`        | 81 HTTP small         | `port81s`            |
-| Deezer          | `deezer`             | 465 SMTPS small       | `port465s`           |
-| Disney+         | `disneyplus`         | 853 DoT small         | `port853s`           |
-| Facebook Video  | `facebookvideo`      | 993 IMAPS small       | `port993s`           |
-| Google Meet     | `meet`               | 995 POP3S small       | `port995s`           |
-| Hulu            | `hulu`               | 1194 OpenVPN small    | `port1194s`          |
-| Microsoft Teams | `teams`              | 1701 L2TP small       | `port1701s`          |
-| NBC Sports      | `nbcsports`          | 5061 SIPS small       | `port5061s`          |
-| Netflix         | `netflix`            | 6881 BitTorrent small | `port6881s`          |
-| Molotov TV      | `molotovtv`          | 8080 SpeedTest small  | `port8080s`          |
-| myCANAL         | `mycanal`            | 8443 SpeedTest small  | `port8443s`          |
-| OCS             | `ocs`                | 80 HTTPS large        | `port80l`            |
-| Prime Video     | `amazon`             | 81 HTTP large         | `port81l`            |
-| Salto           | `salto`              | 465 SMTPS large       | `port465l`           |
-| SFR Play        | `sfrplay`            | 853 DoT large         | `port853l`           |
-| Skype           | `skype`              | 993 IMAPS large       | `port993l`           |
-| Spotify         | `spotify`            | 995 POP3S large       | `port995l`           |
-| Twitch          | `twitch`             | 1194 OpenVPN large    | `port1194l`          |
-| Twitter Video   | `twittervideo`       | 1701 L2TP large       | `port1701l`          |
-| Vimeo           | `vimeo`              | 5061 SIPS large       | `port5061l`          |
-| Webex           | `webex`              | 6881 BitTorrent large | `port6881l`          |
-| WhatsApp        | `whatsapp`           | 8080 SpeedTest large  | `port8080l`          |
-| YouTube         | `youtube`            | 8443 SpeedTest large  | `port8443l`          |
-| Zoom            | `zoom`               |                       |                      |
+| App Name           | Test Name (`-n` arg) | Port Name             | Test Name (`-n` arg) |
+|--------------------|----------------------|-----------------------|----------------------|
+| Amazon Prime Video | `amazon`             | 80 HTTP small         | `port80s`            |
+| Apple Music        | `applemusic`         | 81 HTTP small         | `port81s`            |
+| Dailymotion        | `dailymotion`        | 465 SMTPS small       | `port465s`           |
+| Deezer             | `deezer`             | 853 DoT small         | `port853s`           |
+| Discord            | `discord`            | 993 IMAPS small       | `port993s`           |
+| Disney+            | `disneyplus`         | 995 POP3S small       | `port995s`           |
+| ESPN               | `espn`               | 1194 OpenVPN small    | `port1194s`          |
+| Facebook           | `facebook`           | 1701 L2TP small       | `port1701s`          |
+| Google Meet        | `meet`               | 5061 SIPS small       | `port5061s`          |
+| Hulu               | `hulu`               | 6881 BitTorrent small | `port6881s`          |
+| Instagram          | `instagram`          | 8080 SpeedTest small  | `port8080s`          |
+| Max                | `max`                | 8443 SpeedTest small  | `port8443s`          |
+| Microsoft Teams    | `teams`              | 80 HTTPS large        | `port80l`            |
+| NBC Sports         | `nbcsports`          | 81 HTTP large         | `port81l`            |
+| Netflix            | `netflix`            | 465 SMTPS large       | `port465l`           |
+| Molotov TV         | `molotovtv`          | 853 DoT large         | `port853l`           |
+| myCANAL            | `mycanal`            | 993 IMAPS large       | `port993l`           |
+| OCS                | `ocs`                | 995 POP3S large       | `port995l`           |
+| Pandora            | `pandora`            | 1194 OpenVPN large    | `port1194l`          |
+| Salto              | `salto`              | 1701 L2TP large       | `port1701l`          |
+| SFR Play           | `sfrplay`            | 5061 SIPS large       | `port5061l`          |
+| Skype              | `skype`              | 6881 BitTorrent large | `port6881l`          |
+| Snapchat           | `snapchat`           | 8080 SpeedTest large  | `port8080l`          |
+| Spotify            | `spotify`            | 8443 SpeedTest large  | `port8443l`          |
+| TikTok             | `tiktok`             |                       |                      |
+| Twitch             | `twitch`             |                       |                      |
+| Vimeo              | `vimeo`              |                       |                      |
+| Webex              | `webex`              |                       |                      |
+| WhatsApp           | `whatsapp`           |                       |                      |
+| X                  | `x`                  |                       |                      |
+| YouTube            | `youtube`            |                       |                      |
+| Zoom               | `zoom`               |                       |                      |
 
 Note: Small port tests are 10 MB per replay, while large port tests are 50 MB per replay.
 
